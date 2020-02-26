@@ -42,8 +42,8 @@ tf_feature_names = tf_vectorizer.get_feature_names()
 
 lda = RobustTopics()
 lda.fit(tf)
-lda._compute_topic_stability()
-lda.stability_report
+#lda.stability_report
+lda.rank_models("mean")
 
 """
 
@@ -105,6 +105,8 @@ class RobustTopics():
                     model_iterations.append(model(n_components=params).fit(X))
             self.models.append(model_iterations)
 
+        self._compute_topic_stability()
+
         return self
 
     def _compute_params(self):
@@ -143,6 +145,9 @@ class RobustTopics():
             report["std"] = similarities.std(axis=1)
 
             self.stability_report.append(report)
+
+    def rank_models(self, value="mean"):
+        return sorted(self.stability_report, key=lambda s: s[value].mean(), reverse=True)
 
     @staticmethod
     def _jaccard_similarity(a, b):
