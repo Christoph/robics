@@ -119,15 +119,15 @@ class RobustTopics():
         return seq
 
     def _compute_topic_stability(self):
-        for models in self.models:
-            n_topics = models[0].n_components
+        for sample_id, sample in enumerate(self.models):
+            n_topics = sample[0].n_components
             terms = []
             similarities = []
             report = {}
 
             # Get all top terms
-            for model in models:
-                terms.append(self._get_top_terms(model, 50))
+            for model in sample:
+                terms.append(self._get_top_terms(model, 10))
 
             # Evaluate each topic
             for topic in range(n_topics):
@@ -138,6 +138,7 @@ class RobustTopics():
             similarities = np.array(similarities)
             self.topic_similarities.append(similarities)
 
+            report["sample_id"] = sample_id
             report["n_topics"] = n_topics
             report["min"] = similarities.min(axis=1)
             report["max"] = similarities.max(axis=1)
