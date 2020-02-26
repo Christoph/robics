@@ -9,9 +9,31 @@ from sklearn.decomposition import LatentDirichletAllocation, NMF
 import sobol_seq
 
 """
+Sources who show how to use Topic models
+
+https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
+
+
 for testing
-from sklearn.datasets import make_multilabel_classification
-X, _ = make_multilabel_classification(random_state=0)
+
+from sklearn.datasets import fetch_20newsgroups
+
+dataset = fetch_20newsgroups(shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
+documents = dataset.data[:100]
+
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+
+no_features = 1000
+
+# NMF is able to use tf-idf
+tfidf_vectorizer = TfidfVectorizer(max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
+tfidf = tfidf_vectorizer.fit_transform(documents)
+tfidf_feature_names = tfidf_vectorizer.get_feature_names()
+
+# LDA can only use raw term counts for LDA because it is a probabilistic graphical model
+tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
+tf = tf_vectorizer.fit_transform(documents)
+tf_feature_names = tf_vectorizer.get_feature_names()
 
 """
 
@@ -37,7 +59,8 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10, topic_models=[LatentDirichletAllocation, NMF]):
+    def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10,
+                 topic_models=[LatentDirichletAllocation, NMF]):
         self.n_components = n_components
         self.samples = n_samples
         self.n_iterations = n_iterations
@@ -75,3 +98,16 @@ class RobustTopics():
                 vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
 
         return seq
+
+    def _get_top_terms(self, model_number, n_terms):
+        topic_terms = []
+        for topic_idx, topic in enumerate(self.models[model_number].components_):
+            topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
+
+        return topic_terms
+
+    def display_topics(self, model_number, feature_names, no_top_words):
+        for topic_idx, topic in enumerate(self.models[model_number].components_):
+            print("Topic %d:" % (topic_idx))
+            print(" ".join([feature_names[i]
+                            for i in topic.argsort()[:-no_top_words - 1:-1]]))
