@@ -62,7 +62,9 @@ class RobustTopics():
     def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10,
                  topic_models=[LatentDirichletAllocation, NMF]):
         self.n_components = n_components
-        self.samples = n_samples
+        self.n_samples = n_samples
+        self.params = self._compute_params()
+
         self.n_iterations = n_iterations
         self.topic_models = topic_models
 
@@ -83,21 +85,28 @@ class RobustTopics():
         """
         self.X = X
 
-        for model in self.topic_models:
-            for params in self._compute_params():
-                result = model(n_components=params).fit(X)
-                self.models.append(result)
+        for params in self.params:
+            model_iterations = []
+            for model in self.topic_models:
+                for it in range(self.n_iterations):
+                    print("Model: ", model, " - Iteration: ", it)
+                    model_iterations.append(model(n_components=params).fit(X))
+            self.models.append(model_iterations)
 
         return self
 
     def _compute_params(self):
         seq = []
 
-        for vec in sobol_seq.i4_sobol_generate(1, self.n_iterations):
+        for vec in sobol_seq.i4_sobol_generate(1, self.n_samples):
             seq.append(int(round(
                 vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
 
         return seq
+
+    def _compute_topic_stability(self):
+        for params in self.params:
+            pass
 
     def _get_top_terms(self, model_number, n_terms):
         topic_terms = []
