@@ -41,13 +41,14 @@ tf_vectorizer = CountVectorizer(
 tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
 
+# Initialize and fit the data
 topics = RobustTopics()
-topics.fit(tf)
+topics.fit(X_lda=tf, X_nmf=tfidf)
+
+# Compare different samples
 # topics.stability_report
 topics.rank_models("mean")
 topics.show_stability_histograms()
-
-# Compare topics over within a sample
 
 # Look at topics for a specific model
 lda.display_topics(sample_id,model_id,tf_feature_names,10)
@@ -76,20 +77,17 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=10,
-                 topic_models=[LatentDirichletAllocation]):
+    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=10):
         self.n_components = n_components
         self.n_samples = n_samples
-        self.params = self._compute_params()
-
         self.n_iterations = n_iterations
-        self.topic_models = topic_models
 
+        self.params = self._compute_params()
         self.samples = []
         self.topic_similarities = []
         self.stability_report = []
 
-    def fit(self, X, y=None):
+    def fit(self, X_lda, X_nmf=None, y=None):
         """Fit the models
 
         Parameters
@@ -102,15 +100,26 @@ class RobustTopics():
         self : object
             Returns self.
         """
-        self.X = X
+        self.X_lda = X_lda
+        self.X_nmf = X_nmf
 
         for params in self.params:
             model_iterations = []
-            for model in self.topic_models:
-                for it in range(self.n_iterations):
-                    print("Model: ", model, " - Iteration: ", it)
-                    model_iterations.append(model(n_components=params).fit(X))
+            for it in range(self.n_iterations):
+                print("Model: LDA - Iteration: ", it)
+                model_iterations.append(
+                    LatentDirichletAllocation(n_components=params).fit(X_lda))
+
             self.samples.append(model_iterations)
+
+            if(X_nmf is not None):
+                nmf_iterations = []
+
+                for it in range(self.n_iterations):
+                    print("Model: NMF - Iteration: ", it)
+                    nmf_iterations.append(
+                        NMF(n_components=params).fit(X_nmf))
+                self.samples.append(nmf_iterations)
 
         self._compute_topic_stability()
 
@@ -145,11 +154,17 @@ class RobustTopics():
             similarities = np.array(similarities)
             self.topic_similarities.append(similarities)
 
+            if isinstance(sample[0], LatentDirichletAllocation):
+                report["model"] = "LDA"
+
+            if isinstance(sample[0], NMF):
+                report["model"] = "NMF"
+
             report["sample_id"] = sample_id
             report["n_topics"] = n_topics
 
-            report["mean/overall"] = n_topics
-            report["min"] = similarities.min()
+            report["mean/overall"] = similarities.mean()
+            report["min"] = similarities.min(axis=1)
             report["max"] = similarities.max(axis=1)
             report["mean"] = similarities.mean(axis=1)
             report["std"] = similarities.std(axis=1)
@@ -157,9 +172,9 @@ class RobustTopics():
             self.stability_report.append(report)
 
     def show_stability_histograms(self):
-        for sample in self.stability_report:
-            fig = px.histogram(sample["mean"], x=0, range_x=[
-                               0, 1], nbins=10, title="Topics: "+str(sample["n_topics"]))
+        for sample in self.rank_models():
+            fig = px.histogram(data_frame=sample["mean"], x=0, nbins=10, range_x=[
+                               0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
             fig.show()
 
     def rank_models(self, value="mean"):
