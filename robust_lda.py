@@ -6,6 +6,8 @@
 
 import numpy as np
 from sklearn.decomposition import LatentDirichletAllocation, NMF
+from sklearn.metrics import pairwise_distances
+from scipy.spatial.distance import pdist
 import sobol_seq
 
 """
@@ -14,11 +16,12 @@ Sources who show how to use Topic models
 https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
 
 
-for testing
+TEST CODE
 
 from sklearn.datasets import fetch_20newsgroups
 
-dataset = fetch_20newsgroups(shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
+dataset = fetch_20newsgroups(
+    shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
 documents = dataset.data[:100]
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -26,14 +29,21 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 no_features = 1000
 
 # NMF is able to use tf-idf
-tfidf_vectorizer = TfidfVectorizer(max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
+tfidf_vectorizer = TfidfVectorizer(
+    max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
 tfidf = tfidf_vectorizer.fit_transform(documents)
 tfidf_feature_names = tfidf_vectorizer.get_feature_names()
 
 # LDA can only use raw term counts for LDA because it is a probabilistic graphical model
-tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
+tf_vectorizer = CountVectorizer(
+    max_df=0.95, min_df=2, max_features=no_features, stop_words='english')
 tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
+
+lda = RobustTopics()
+lda.fit(tf)
+lda._compute_topic_stability()
+lda.stability_report
 
 """
 
@@ -48,7 +58,7 @@ class RobustTopics():
     n_samples : int, default=10
         The number of samples taken from the n_components range.
     n_iterations : int, default=20
-        The number of random runs each sample is computed. 
+        The number of random runs each sample is computed.
         These are used to compute the robustness.
     models : [sklearn topic model classes], default=[LatentDirichletAllocation]
         Possibilities: LatentDirichletAllocation, NMF
@@ -60,7 +70,7 @@ class RobustTopics():
     """
 
     def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10,
-                 topic_models=[LatentDirichletAllocation, NMF]):
+                 topic_models=[LatentDirichletAllocation]):
         self.n_components = n_components
         self.n_samples = n_samples
         self.params = self._compute_params()
@@ -69,6 +79,8 @@ class RobustTopics():
         self.topic_models = topic_models
 
         self.models = []
+        self.topic_similarities = []
+        self.stability_report = []
 
     def fit(self, X, y=None):
         """Fit the models
@@ -105,12 +117,43 @@ class RobustTopics():
         return seq
 
     def _compute_topic_stability(self):
-        for params in self.params:
-            pass
+        for models in self.models:
+            n_topics = models[0].n_components
+            terms = []
+            similarities = []
+            report = {}
 
-    def _get_top_terms(self, model_number, n_terms):
+            # Get all top terms
+            for model in models:
+                terms.append(self._get_top_terms(model, 50))
+
+            # Evaluate each topic
+            for topic in range(n_topics):
+                sim = pdist(np.array(terms)[
+                    :, topic, :], self._jaccard_similarity)
+                similarities.append(sim)
+
+            similarities = np.array(similarities)
+            self.topic_similarities.append(similarities)
+
+            report["n_topics"] = n_topics
+            report["min"] = similarities.min(axis=1)
+            report["max"] = similarities.max(axis=1)
+            report["mean"] = similarities.mean(axis=1)
+            report["std"] = similarities.std(axis=1)
+
+            self.stability_report.append(report)
+
+    @staticmethod
+    def _jaccard_similarity(a, b):
+        sa = set(a)
+        sb = set(b)
+        return len(sa.intersection(sb))/len(sa.union(sb))
+
+    @staticmethod
+    def _get_top_terms(model, n_terms):
         topic_terms = []
-        for topic_idx, topic in enumerate(self.models[model_number].components_):
+        for topic_idx, topic in enumerate(model.components_):
             topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
 
         return topic_terms
