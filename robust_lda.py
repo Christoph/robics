@@ -5,7 +5,7 @@
 # License: MIT
 
 import numpy as np
-from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation, NMF
 import sobol_seq
 
 """
@@ -16,8 +16,9 @@ X, _ = make_multilabel_classification(random_state=0)
 """
 
 
-class RobustLDA():
-    """Run LDA multiple times and return hyper parameters ranked by topic stability.
+class RobustTopics():
+    """Run different topic models multiple times and return them by their ranked by topic stability.
+
     Some Explanation
     ----------
     n_components : [min_n, max_n], default=[5, 50]
@@ -27,20 +28,25 @@ class RobustLDA():
     n_iterations : int, default=20
         The number of random runs each sample is computed. 
         These are used to compute the robustness.
+    models : [sklearn topic model classes], default=[LatentDirichletAllocation]
+        Possibilities: LatentDirichletAllocation, NMF
+
     See also
     --------
     sklearn.decomposition.LatentDirichletAllocation : LDA implementation.
+    sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[5, 50], n_samples=10, n_iterations=20):
+    def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10, topic_models=[LatentDirichletAllocation, NMF]):
         self.n_components = n_components
         self.samples = n_samples
         self.n_iterations = n_iterations
+        self.topic_models = topic_models
 
         self.models = []
 
     def fit(self, X, y=None):
-        """Fit the model
+        """Fit the models
 
         Parameters
         ----------
@@ -54,9 +60,10 @@ class RobustLDA():
         """
         self.X = X
 
-        for params in self._compute_params():
-            model = LatentDirichletAllocation(n_components=params).fit(X)
-            self.models.append(model)
+        for model in self.topic_models:
+            for params in self._compute_params():
+                result = model(n_components=params).fit(X)
+                self.models.append(result)
 
         return self
 
