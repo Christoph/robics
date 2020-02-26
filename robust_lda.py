@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.decomposition import LatentDirichletAllocation, NMF
 from sklearn.metrics import pairwise_distances
 from scipy.spatial.distance import pdist
+import plotly.express as px
 import sobol_seq
 
 """
@@ -40,10 +41,16 @@ tf_vectorizer = CountVectorizer(
 tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
 
-lda = RobustTopics()
-lda.fit(tf)
-#lda.stability_report
-lda.rank_models("mean")
+topics = RobustTopics()
+topics.fit(tf)
+# topics.stability_report
+topics.rank_models("mean")
+topics.show_stability_histograms()
+
+# Compare topics over within a sample
+
+# Look at topics for a specific model
+lda.display_topics(sample_id,model_id,tf_feature_names,10)
 
 """
 
@@ -53,7 +60,7 @@ class RobustTopics():
 
     Some Explanation
     ----------
-    n_components : [min_n, max_n], default=[5, 50]
+    n_components : [min_n, max_n], default=[1, 20]
         Minimum and maximum values for the n_components parameter.
     n_samples : int, default=10
         The number of samples taken from the n_components range.
@@ -69,7 +76,7 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[5, 50], n_samples=5, n_iterations=10,
+    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=10,
                  topic_models=[LatentDirichletAllocation]):
         self.n_components = n_components
         self.n_samples = n_samples
@@ -127,7 +134,7 @@ class RobustTopics():
 
             # Get all top terms
             for model in sample:
-                terms.append(self._get_top_terms(model, 10))
+                terms.append(self._get_top_terms(model, 5))
 
             # Evaluate each topic
             for topic in range(n_topics):
@@ -140,15 +147,32 @@ class RobustTopics():
 
             report["sample_id"] = sample_id
             report["n_topics"] = n_topics
-            report["min"] = similarities.min(axis=1)
+
+            report["mean/overall"] = n_topics
+            report["min"] = similarities.min()
             report["max"] = similarities.max(axis=1)
             report["mean"] = similarities.mean(axis=1)
             report["std"] = similarities.std(axis=1)
 
             self.stability_report.append(report)
 
+    def show_stability_histograms(self):
+        for sample in self.stability_report:
+            fig = px.histogram(sample["mean"], x=0, range_x=[
+                               0, 1], nbins=10, title="Topics: "+str(sample["n_topics"]))
+            fig.show()
+
     def rank_models(self, value="mean"):
         return sorted(self.stability_report, key=lambda s: s[value].mean(), reverse=True)
+
+    def analyse_sample(self, sample_id):
+        pass
+
+    def display_topics(self, sample_number, model_number, feature_names, no_top_words):
+        for topic_idx, topic in enumerate(self.samples[sample_number][model_number].components_):
+            print("Topic %d:" % (topic_idx))
+            print(" ".join([feature_names[i]
+                            for i in topic.argsort()[:-no_top_words - 1:-1]]))
 
     @staticmethod
     def _jaccard_similarity(a, b):
@@ -163,9 +187,3 @@ class RobustTopics():
             topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
 
         return topic_terms
-
-    def display_topics(self, sample_number, feature_names, no_top_words):
-        for topic_idx, topic in enumerate(self.samples[sample_number].components_):
-            print("Topic %d:" % (topic_idx))
-            print(" ".join([feature_names[i]
-                            for i in topic.argsort()[:-no_top_words - 1:-1]]))
