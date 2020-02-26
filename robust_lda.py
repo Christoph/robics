@@ -143,7 +143,7 @@ class RobustTopics():
 
             # Get all top terms
             for model in sample:
-                terms.append(self._get_top_terms(model, 5))
+                terms.append(self._get_top_terms(model, 20))
 
             # Evaluate each topic
             for topic in range(n_topics):
