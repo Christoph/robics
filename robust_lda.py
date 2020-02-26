@@ -213,7 +213,7 @@ class RobustTopics():
     @staticmethod
     def _get_top_terms(model, n_terms):
         topic_terms = []
-        for topic_idx, topic in enumerate(model.components_):
+        for topic in model.components_:
             topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
 
         return topic_terms
