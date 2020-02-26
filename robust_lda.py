@@ -78,7 +78,7 @@ class RobustTopics():
         self.n_iterations = n_iterations
         self.topic_models = topic_models
 
-        self.models = []
+        self.samples = []
         self.topic_similarities = []
         self.stability_report = []
 
@@ -103,7 +103,7 @@ class RobustTopics():
                 for it in range(self.n_iterations):
                     print("Model: ", model, " - Iteration: ", it)
                     model_iterations.append(model(n_components=params).fit(X))
-            self.models.append(model_iterations)
+            self.samples.append(model_iterations)
 
         self._compute_topic_stability()
 
@@ -119,7 +119,7 @@ class RobustTopics():
         return seq
 
     def _compute_topic_stability(self):
-        for sample_id, sample in enumerate(self.models):
+        for sample_id, sample in enumerate(self.samples):
             n_topics = sample[0].n_components
             terms = []
             similarities = []
@@ -164,8 +164,8 @@ class RobustTopics():
 
         return topic_terms
 
-    def display_topics(self, model_number, feature_names, no_top_words):
-        for topic_idx, topic in enumerate(self.models[model_number].components_):
+    def display_topics(self, sample_number, feature_names, no_top_words):
+        for topic_idx, topic in enumerate(self.samples[sample_number].components_):
             print("Topic %d:" % (topic_idx))
             print(" ".join([feature_names[i]
                             for i in topic.argsort()[:-no_top_words - 1:-1]]))
