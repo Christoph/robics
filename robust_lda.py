@@ -47,6 +47,7 @@ topics.fit(X_lda=tf, X_nmf=tfidf)
 
 # Compare different samples
 # topics.stability_report
+# pd.DataFrame.from_records(topics.stability_report)
 topics.rank_models("mean")
 topics.show_stability_histograms()
 
@@ -77,14 +78,16 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=10):
+    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=8, n_relevant_top_words=20):
         self.n_components = n_components
         self.n_samples = n_samples
         self.n_iterations = n_iterations
+        self.n_relevant_top_words = n_relevant_top_words
 
         self.params = self._compute_params()
         self.samples = []
         self.topic_similarities = []
+        self.topic_terms = []
         self.stability_report = []
 
     def fit(self, X_lda, X_nmf=None, y=None):
@@ -143,7 +146,10 @@ class RobustTopics():
 
             # Get all top terms
             for model in sample:
-                terms.append(self._get_top_terms(model, 20))
+                terms.append(self._get_top_terms(
+                    model, self.n_relevant_top_words))
+
+            self.topic_terms.append(np.array(terms))
 
             # Evaluate each topic
             for topic in range(n_topics):
@@ -180,8 +186,17 @@ class RobustTopics():
     def rank_models(self, value="mean"):
         return sorted(self.stability_report, key=lambda s: s[value].mean(), reverse=True)
 
-    def analyse_sample(self, sample_id):
-        pass
+    def analyse_sample(self, sample_id, feature_names):
+        print("Intersecting words for each topic")
+
+        # Intersect each topic
+        for topic in range(len(self.samples[sample_id][0].components_)):
+            inter = set(self.topic_terms[sample_id][topic][0])
+            for terms in self.topic_terms[sample_id]:
+                inter.intersection_update(set(list(terms[topic])))
+
+            print("Topic: " + str(topic))
+            print(" ".join([feature_names[i] for i in inter]))
 
     def display_topics(self, sample_number, model_number, feature_names, no_top_words):
         for topic_idx, topic in enumerate(self.samples[sample_number][model_number].components_):
