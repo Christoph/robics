@@ -79,17 +79,20 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[1, 20], n_samples=3, n_iterations=4, n_relevant_top_words=20):
+    def __init__(self, n_components=[4, 50], n_samples=10, n_iterations=10, n_relevant_top_words=30, rank_metric="kendalls", distribution_metric="jenson_shannon"):
         self.n_components = n_components
         self.n_samples = n_samples
         self.n_iterations = n_iterations
         self.n_relevant_top_words = n_relevant_top_words
+        self.rank_metric = rank_metric
+        self.distribution_metric = distribution_metric
 
         self.params = self._compute_params()
         self.samples = []
         self.topic_similarities = []
         self.topic_terms = []
         self.stability_report = []
+        self.full_stability_report = []
 
     def fit(self, X_lda, X_nmf=None, y=None):
         """Fit the models
@@ -145,10 +148,11 @@ class RobustTopics():
             n_topics = sample[0].n_components
             terms = []
             term_distributions = []
-            kendalls_ranking = []
-            spearman_ranking = []
+            ranking = []
+            distribution = []
             similarities = []
             report = {}
+            report_full = {}
 
             # Get all top terms and distributions
             for model in sample:
@@ -166,39 +170,73 @@ class RobustTopics():
                     :, topic, :], self._jaccard_similarity)
                 similarities.append(sim)
 
-                rank = pdist(ranking_vecs[sample_id][
-                    :, topic, :], self._kendalls)
-                kendalls_ranking.append(rank)
+                if self.distribution_metric == "jenson_shannon":
+                    jen = pdist(np.array(term_distributions)[
+                        :, topic, :], self._jenson_similarity)
+                    distribution.append(jen)
+                if self.distribution_metric == "wasserstein":
+                    jen = pdist(np.array(term_distributions)[
+                        :, topic, :], self._wasserstein_similarity)
+                    distribution.append(jen)
 
-                # spear = pdist(ranking_vecs[sample_id][
-                #     :, topic, :], self._spear)
-                # spearman_ranking.append(spear)
+                if self.rank_metric == "kendalls":
+                    rank = pdist(ranking_vecs[sample_id][
+                        :, topic, :], self._kendalls)
+                    ranking.append(rank)
 
-            kendalls_ranking = np.array(kendalls_ranking)
+                if self.rank_metric == "spearman":
+                    spear = pdist(ranking_vecs[sample_id][
+                        :, topic, :], self._spear)
+                    ranking.append(spear)
+
+            kendalls_ranking = np.array(ranking)
             similarities = np.array(similarities)
+            jenson = np.array(distribution)
             self.topic_similarities.append(similarities)
 
             if isinstance(sample[0], LatentDirichletAllocation):
                 report["model"] = "LDA"
+                report_full["model"] = "LDA"
 
             if isinstance(sample[0], NMF):
                 report["model"] = "NMF"
+                report_full["model"] = "NMF"
 
             report["sample_id"] = sample_id
             report["n_topics"] = n_topics
 
             report["jaccard"] = similarities.mean()
-            report["kendalls"] = kendalls_ranking.mean()
-            report["jaccard_min"] = similarities.min(axis=1)
-            report["jaccard_max"] = similarities.max(axis=1)
-            report["jaccard_mean"] = similarities.mean(axis=1)
-            report["jaccard_std"] = similarities.std(axis=1)
-            report["kendalls_min"] = kendalls_ranking.min(axis=1)
-            report["kendalls_max"] = kendalls_ranking.max(axis=1)
-            report["kendalls_mean"] = kendalls_ranking.mean(axis=1)
-            report["kendalls_std"] = kendalls_ranking.std(axis=1)
+            report["jaccard_std"] = similarities.std()
+            report[self.rank_metric] = kendalls_ranking.mean()
+            report[self.rank_metric+"_std"] = kendalls_ranking.std()
+            report[self.distribution_metric] = jenson.mean()
+            report[self.distribution_metric+"_std"] = jenson.std()
+
+            report_full["sample_id"] = sample_id
+            report_full["n_topics"] = n_topics
+
+            report_full["jaccard"] = similarities.mean()
+            report_full["kendalls"] = kendalls_ranking.mean()
+            report_full["jenson"] = jenson.mean()
+
+            report_full["jaccard_min"] = similarities.min(axis=1)
+            report_full["jaccard_max"] = similarities.max(axis=1)
+            report_full["jaccard_mean"] = similarities.mean(axis=1)
+            report_full["jaccard_std"] = similarities.std(axis=1)
+            report_full[self.rank_metric+"_min"] = kendalls_ranking.min(axis=1)
+            report_full[self.rank_metric+"_max"] = kendalls_ranking.max(axis=1)
+            report_full[self.rank_metric +
+                        "_mean"] = kendalls_ranking.mean(axis=1)
+            report_full[self.rank_metric+"_std"] = kendalls_ranking.std(axis=1)
+            report_full[self.distribution_metric+"_min"] = jenson.min(axis=1)
+            report_full[self.distribution_metric +
+                        "_max"] = jenson.max(axis=1)
+            report_full[self.distribution_metric+"_mean"] = jenson.mean(axis=1)
+            report_full[self.distribution_metric +
+                        "_std"] = jenson.std(axis=1)
 
             self.stability_report.append(report)
+            self.full_stability_report.append(report_full)
 
     def show_stability_histograms(self):
         for sample in self.rank_models():
@@ -206,8 +244,8 @@ class RobustTopics():
                                0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
             fig.show()
 
-    def rank_models(self, value="jaccard_mean"):
-        return sorted(self.stability_report, key=lambda s: s[value].mean(), reverse=True)
+    def rank_models(self, weights=[1, 1, 1]):
+        return sorted(self.stability_report, key=lambda s: (s["jaccard"]*weights[0] + s[self.rank_metric]*weights[1] + s[self.distribution_metric]*weights[2])/np.sum(weights), reverse=True)
 
     def analyse_sample(self, sample_id, feature_names):
         print("Intersecting words for each topic")
@@ -267,6 +305,16 @@ class RobustTopics():
     def _spear(a, b):
         k, _ = spearmanr(a, b)
         return k
+
+    @staticmethod
+    def _jenson_similarity(a, b):
+        distance = jensenshannon(a, b)
+        return 1 - distance
+
+    @staticmethod
+    def _wasserstein_similarity(a, b):
+        distance = wasserstein_distance(a, b)
+        return 1 - distance
 
     @staticmethod
     def _terms_to_ranking(terms, vocab):
