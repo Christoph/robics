@@ -255,7 +255,12 @@ class RobustTopics():
 
     @staticmethod
     def _kendalls(a, b):
-        k, p = kendalltau(a, b)
+        k, _ = kendalltau(a, b)
+        return k
+
+    @staticmethod
+    def _spear(a, b):
+        k, _ = spearmanr(a, b)
         return k
 
     @staticmethod
