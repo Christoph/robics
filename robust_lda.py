@@ -145,7 +145,8 @@ class RobustTopics():
             n_topics = sample[0].n_components
             terms = []
             term_distributions = []
-            term_rankings = []
+            kendalls_ranking = []
+            spearman_ranking = []
             similarities = []
             report = {}
 
@@ -167,9 +168,13 @@ class RobustTopics():
 
                 rank = pdist(ranking_vecs[sample_id][
                     :, topic, :], self._kendalls)
-                term_rankings.append(rank)
+                kendalls_ranking.append(rank)
 
-            term_rankings = np.array(term_rankings)
+                # spear = pdist(ranking_vecs[sample_id][
+                #     :, topic, :], self._spear)
+                # spearman_ranking.append(spear)
+
+            kendalls_ranking = np.array(kendalls_ranking)
             similarities = np.array(similarities)
             self.topic_similarities.append(similarities)
 
@@ -183,15 +188,15 @@ class RobustTopics():
             report["n_topics"] = n_topics
 
             report["jaccard"] = similarities.mean()
-            report["kendalls"] = term_rankings.mean()
+            report["kendalls"] = kendalls_ranking.mean()
             report["jaccard_min"] = similarities.min(axis=1)
             report["jaccard_max"] = similarities.max(axis=1)
             report["jaccard_mean"] = similarities.mean(axis=1)
             report["jaccard_std"] = similarities.std(axis=1)
-            report["kendalls_min"] = term_rankings.min(axis=1)
-            report["kendalls_max"] = term_rankings.max(axis=1)
-            report["kendalls_mean"] = term_rankings.mean(axis=1)
-            report["kendalls_std"] = term_rankings.std(axis=1)
+            report["kendalls_min"] = kendalls_ranking.min(axis=1)
+            report["kendalls_max"] = kendalls_ranking.max(axis=1)
+            report["kendalls_mean"] = kendalls_ranking.mean(axis=1)
+            report["kendalls_std"] = kendalls_ranking.std(axis=1)
 
             self.stability_report.append(report)
 
