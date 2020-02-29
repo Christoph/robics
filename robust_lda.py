@@ -139,6 +139,8 @@ class RobustTopics():
         return seq
 
     def _compute_topic_stability(self):
+        ranking_vecs = self._create_ranking_vectors()
+
         for sample_id, sample in enumerate(self.samples):
             n_topics = sample[0].n_components
             terms = []
@@ -163,6 +165,11 @@ class RobustTopics():
                     :, topic, :], self._jaccard_similarity)
                 similarities.append(sim)
 
+                rank = pdist(ranking_vecs[sample_id][
+                    :, topic, :], self._kendalls)
+                term_rankings.append(rank)
+
+            term_rankings = np.array(term_rankings)
             similarities = np.array(similarities)
             self.topic_similarities.append(similarities)
 
@@ -175,11 +182,16 @@ class RobustTopics():
             report["sample_id"] = sample_id
             report["n_topics"] = n_topics
 
-            report["mean/overall"] = similarities.mean()
-            report["min"] = similarities.min(axis=1)
-            report["max"] = similarities.max(axis=1)
-            report["mean"] = similarities.mean(axis=1)
-            report["std"] = similarities.std(axis=1)
+            report["jaccard"] = similarities.mean()
+            report["kendalls"] = term_rankings.mean()
+            report["jaccard_min"] = similarities.min(axis=1)
+            report["jaccard_max"] = similarities.max(axis=1)
+            report["jaccard_mean"] = similarities.mean(axis=1)
+            report["jaccard_std"] = similarities.std(axis=1)
+            report["kendalls_min"] = term_rankings.min(axis=1)
+            report["kendalls_max"] = term_rankings.max(axis=1)
+            report["kendalls_mean"] = term_rankings.mean(axis=1)
+            report["kendalls_std"] = term_rankings.std(axis=1)
 
             self.stability_report.append(report)
 
@@ -189,7 +201,7 @@ class RobustTopics():
                                0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
             fig.show()
 
-    def rank_models(self, value="mean"):
+    def rank_models(self, value="jaccard_mean"):
         return sorted(self.stability_report, key=lambda s: s[value].mean(), reverse=True)
 
     def analyse_sample(self, sample_id, feature_names):
@@ -229,8 +241,9 @@ class RobustTopics():
         for sample in sample_terms:
             rankings = []
             for model_terms in sample:
-                rankings.append(self._terms_to_ranking(model_terms, vocab_vec))
-            ranking_vecs.append(rankings)
+                rankings.append([self._terms_to_ranking(t, vocab_vec)
+                                 for t in model_terms])
+            ranking_vecs.append(np.array(rankings))
 
         return ranking_vecs
 
@@ -239,6 +252,11 @@ class RobustTopics():
         sa = set(a)
         sb = set(b)
         return len(sa.intersection(sb))/len(sa.union(sb))
+
+    @staticmethod
+    def _kendalls(a, b):
+        k, p = kendalltau(a, b)
+        return k
 
     @staticmethod
     def _terms_to_ranking(terms, vocab):
