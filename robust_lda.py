@@ -6,8 +6,9 @@
 
 import numpy as np
 from sklearn.decomposition import LatentDirichletAllocation, NMF
-from sklearn.metrics import pairwise_distances
 from scipy.spatial.distance import pdist
+from scipy.spatial.distance import jensenshannon
+from scipy.stats import kendalltau, spearmanr, wasserstein_distance
 import plotly.express as px
 import sobol_seq
 
@@ -78,7 +79,7 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[1, 20], n_samples=5, n_iterations=8, n_relevant_top_words=20):
+    def __init__(self, n_components=[1, 20], n_samples=3, n_iterations=4, n_relevant_top_words=20):
         self.n_components = n_components
         self.n_samples = n_samples
         self.n_iterations = n_iterations
@@ -141,13 +142,18 @@ class RobustTopics():
         for sample_id, sample in enumerate(self.samples):
             n_topics = sample[0].n_components
             terms = []
+            term_distributions = []
+            term_rankings = []
             similarities = []
             report = {}
 
-            # Get all top terms
+            # Get all top terms and distributions
             for model in sample:
                 terms.append(self._get_top_terms(
                     model, self.n_relevant_top_words))
+
+                term_distributions.append(
+                    model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
 
             self.topic_terms.append(np.array(terms))
 
@@ -204,11 +210,45 @@ class RobustTopics():
             print(" ".join([feature_names[i]
                             for i in topic.argsort()[:-no_top_words - 1:-1]]))
 
+    def _create_ranking_vectors(self):
+        vocab = set()
+        sample_terms = []
+        ranking_vecs = []
+
+        for sample in self.samples:
+            terms = []
+            for model in sample:
+                top_terms = self._get_top_terms(
+                    model, self.n_relevant_top_words)
+                terms.append(top_terms)
+                vocab.update([e for l in top_terms for e in l])
+            sample_terms.append(terms)
+
+        vocab_vec = list(vocab)
+
+        for sample in sample_terms:
+            rankings = []
+            for model_terms in sample:
+                rankings.append(self._terms_to_ranking(model_terms, vocab_vec))
+            ranking_vecs.append(rankings)
+
+        return ranking_vecs
+
     @staticmethod
     def _jaccard_similarity(a, b):
         sa = set(a)
         sb = set(b)
         return len(sa.intersection(sb))/len(sa.union(sb))
+
+    @staticmethod
+    def _terms_to_ranking(terms, vocab):
+        vec = []
+        for e in vocab:
+            if e in terms:
+                vec.append(terms.index(e))
+            else:
+                vec.append(len(vocab))
+        return vec
 
     @staticmethod
     def _get_top_terms(model, n_terms):
