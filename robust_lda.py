@@ -89,15 +89,14 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_components=[4, 50], n_samples=10, n_iterations=10, n_relevant_top_words=30, rank_metric="kendalls", distribution_metric="jenson_shannon"):
-        self.n_components = n_components
-        self.n_samples = n_samples
+    def __init__(self, n_iterations=10, n_relevant_top_words=30, rank_metric="kendalls", distribution_metric="jenson_shannon"):
         self.n_iterations = n_iterations
         self.n_relevant_top_words = n_relevant_top_words
         self.rank_metric = rank_metric
         self.distribution_metric = distribution_metric
 
-        self.params = self._compute_params()
+        self.models = {}
+
         self.samples = []
         self.topic_similarities = []
         self.topic_terms = []
@@ -118,43 +117,45 @@ class RobustTopics():
             Returns self.
         """
 
-        for params in self.params:
-            model_iterations = []
-            for it in range(self.n_iterations):
-                print("Model: LDA - Iteration: ", it)
-                model_iterations.append(
-                    LatentDirichletAllocation(n_components=params).fit(self.X_lda))
+        for name, settings in self.models.items():
+            print("Model: " + name)
 
-            self.samples.append(model_iterations)
+            for sample in settings["sampling"]:
+                model_iterations = []
+                print(sample)
 
-            if(self.X_nmf is not None):
-                nmf_iterations = []
+                for it in range(1, self.n_iterations+1):
+                    print("Iteration: "+str(it)+"/"+self.n_iterations)
 
-                for it in range(self.n_iterations):
-                    print("Model: NMF - Iteration: ", it)
-                    nmf_iterations.append(
-                        NMF(n_components=params).fit(self.X_nmf))
-                self.samples.append(nmf_iterations)
+                    if name == "sklearn_lda":
+                        model_iterations.append(
+                            (LatentDirichletAllocation(sample).fit(settings["data"])))
+
+                    if name == "sklearn_nmf":
+                        model_iterations.append(
+                            (NMF(sample).fit(settings["data"])))
+
+                settings["models"] = model_iterations
 
         self._compute_topic_stability()
 
         return self
 
-    def load_sklearn_lda_data(self, X, setup="simple", custom_params=None):
-        self.X_lda = X
+    def load_sklearn_lda_data(self, X, n_samples, setup="simple", custom_params=None):
+        model_informations = {
+            "n_samples": n_samples,
+            "data": X,
+            "models": None
+        }
 
         if setup == "simple":
-            self.params_lda = {
-                "n_components": [5, 50]
-            }
-        if setup == "simple":
-            self.params_lda = {
+            model_informations["params"] = {
                 "n_components":
                 {"type": int, "mode": "range", "values": [5, 50]}
             }
 
         if setup == "complex":
-            self.params_lda = {
+            model_informations["params"] = {
                 "n_components":
                 {"type": int, "mode": "range", "values": [5, 50]},
                 "learning_decayfloat":
@@ -162,13 +163,22 @@ class RobustTopics():
             }
 
         if setup == "custom":
-            self.params_lda = custom_params
+            model_informations["params"] = custom_params
 
-    def load_sklearn_nmf_data(self, X, setup="simple", custom_params=None):
-        self.X_nmf = X
+        model_informations["sampling"] = self._compute_param_combinations(
+            model_informations["params"], n_samples)
+
+        self.models["sklearn_lda"] = model_informations
+
+    def load_sklearn_nmf_data(self, X, n_samples, setup="simple", custom_params=None):
+        model_informations = {
+            "n_samples": n_samples,
+            "data": X,
+            "models": None
+        }
 
         if setup == "simple":
-            self.params_nmf = {
+            model_informations["params"] = {
                 "n_components":
                 {"type": int, "mode": "range", "values": [5, 50]},
                 "init":
@@ -178,7 +188,7 @@ class RobustTopics():
             }
 
         if setup == "complex":
-            self.params_nmf = {
+            model_informations["params"] = {
                 "n_components":
                 {"type": int, "mode": "range", "values": [5, 50]},
                 "init":
@@ -190,16 +200,12 @@ class RobustTopics():
             }
 
         if setup == "custom":
-            self.params_nmf = custom_params
+            model_informations["params"] = custom_params
 
-    def _compute_params(self):
-        seq = []
+        model_informations["sampling"] = self._compute_param_combinations(
+            model_informations["params"], n_samples)
 
-        for vec in sobol_seq.i4_sobol_generate(1, self.n_samples):
-            seq.append(int(round(
-                vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
-
-        return seq
+        self.models["sklearn_nmf"] = model_informations
 
     def _compute_param_combinations(self, params, n_samples):
         seq = []
