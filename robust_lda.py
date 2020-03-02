@@ -9,7 +9,6 @@ from sklearn.decomposition import LatentDirichletAllocation, NMF
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import kendalltau, spearmanr, wasserstein_distance
-import plotly.express as px
 import sobol_seq
 
 """
@@ -48,12 +47,22 @@ topics.fit(X_lda=tf, X_nmf=tfidf)
 
 # Compare different samples
 # topics.stability_report
-# pd.DataFrame.from_records(topics.stability_report)
 topics.rank_models("mean")
 topics.show_stability_histograms()
 
 # Look at topics for a specific model
 lda.display_topics(sample_id,model_id,tf_feature_names,10)
+
+# Convert the stability report to a pandas dataframe
+pd.DataFrame.from_records(topics.stability_report)
+
+# Print histograms
+import plotly.express as px
+def show_stability_histograms(self):
+    for sample in self.rank_models():
+        fig = px.histogram(data_frame=sample["mean"], x=0, nbins=10, range_x=[
+                        0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
+        fig.show()
 
 """
 
@@ -94,7 +103,7 @@ class RobustTopics():
         self.stability_report = []
         self.full_stability_report = []
 
-    def fit(self, X_lda, X_nmf=None, y=None):
+    def fit_models(self):
         """Fit the models
 
         Parameters
@@ -107,35 +116,63 @@ class RobustTopics():
         self : object
             Returns self.
         """
-        self.X_lda = X_lda
-        self.X_nmf = X_nmf
 
         for params in self.params:
             model_iterations = []
             for it in range(self.n_iterations):
                 print("Model: LDA - Iteration: ", it)
                 model_iterations.append(
-                    LatentDirichletAllocation(n_components=params).fit(X_lda))
+                    LatentDirichletAllocation(n_components=params).fit(self.X_lda))
 
             self.samples.append(model_iterations)
 
-            if(X_nmf is not None):
+            if(self.X_nmf is not None):
                 nmf_iterations = []
 
                 for it in range(self.n_iterations):
                     print("Model: NMF - Iteration: ", it)
                     nmf_iterations.append(
-                        NMF(n_components=params).fit(X_nmf))
+                        NMF(n_components=params).fit(self.X_nmf))
                 self.samples.append(nmf_iterations)
 
         self._compute_topic_stability()
 
         return self
 
+    def load_sklearn_lda_data(self, X, setup="simple", custom_params= None):
+        self.X_lda = X
+
+        if setup == "simple":
+            self.params_lda = {
+                "n_components": [5, 50]
+                }
+
+    def load_sklearn_nmf_data(self, X, setup="simple", custom_params= None):
+        self.X_nmf = X
+
+        if setup == "simple":
+            self.params_nmf = {
+                "n_components": [5, 50],
+                "init": ["random", "nndsvd", "nndsvda", None],
+                "beta_loss": ["frobenius", "kullback-leibler"]
+                }
+        
+        
+
     def _compute_params(self):
         seq = []
 
         for vec in sobol_seq.i4_sobol_generate(1, self.n_samples):
+            seq.append(int(round(
+                vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
+
+        return seq
+
+    @staticmethod
+    def _compute_param_combinations(params, n_samples):
+        seq = []
+
+        for vec in sobol_seq.i4_sobol_generate(len(params), n_samples):
             seq.append(int(round(
                 vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
 
@@ -237,12 +274,6 @@ class RobustTopics():
 
             self.stability_report.append(report)
             self.full_stability_report.append(report_full)
-
-    def show_stability_histograms(self):
-        for sample in self.rank_models():
-            fig = px.histogram(data_frame=sample["mean"], x=0, nbins=10, range_x=[
-                               0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
-            fig.show()
 
     def rank_models(self, weights=[1, 1, 1]):
         return sorted(self.stability_report, key=lambda s: (s["jaccard"]*weights[0] + s[self.rank_metric]*weights[1] + s[self.distribution_metric]*weights[2])/np.sum(weights), reverse=True)
