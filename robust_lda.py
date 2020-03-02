@@ -153,10 +153,28 @@ class RobustTopics():
 
         if setup == "simple":
             self.params_nmf = {
-                "n_components": {"type": int, "mode": "range", "values": [5, 50]},
-                "init": ["random", "nndsvd", "nndsvda", None],
-                "beta_loss": ["frobenius", "kullback-leibler"]
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "init":
+                {"type": str, "mode": "fixed", "values": "random"},
+                "beta_loss":
+                {"type": str, "mode": "fixed", "values": "kullback-leibler"}
             }
+
+        if setup == "complex":
+            self.params_nmf = {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "init":
+                {"type": str, "mode": "list", "values": [
+                    "random", "nndsvd", "nndsvda", None]},
+                "beta_loss":
+                {"type": str, "mode": "list", "values": [
+                    "frobenius", "kullback-leibler"]}
+            }
+
+        if setup == "custom":
+            self.params_nmf = custom_params
 
     def _compute_params(self):
         seq = []
@@ -167,15 +185,28 @@ class RobustTopics():
 
         return seq
 
-    @staticmethod
-    def _compute_param_combinations(params, n_samples):
+    def _compute_param_combinations(self, params, n_samples):
         seq = []
+        changing_params = list(
+            filter(lambda x: params[x]["mode"] is not "fixed", params))
+        fixed_params = list(
+            filter(lambda x: params[x]["mode"] is "fixed", params))
 
         for vec in sobol_seq.i4_sobol_generate(len(params), n_samples):
-            seq.append(int(round(
-                vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
-
+            sample = {}
+            for i, name in enumerate(changing_params):
+                sample[name] = self._param_to_value(
+                    params[name], vec[i])
+            for name in fixed_params:
+                sample[name] = params[name]["values"]
+            seq.append(sample)
         return seq
+
+    def _param_to_value(self, param, sampling):
+        if param["mode"] == "range":
+            return self._range_to_value(param["values"], sampling, param["type"])
+        if param["mode"] == "list":
+            return self._list_to_value(param["values"], sampling, param["type"])
 
     @staticmethod
     def _range_to_value(p_range, sampling, p_type):
@@ -183,7 +214,7 @@ class RobustTopics():
         return int(value) if p_type is int else value
 
     @staticmethod
-    def _categories_to_value(p_values, sampling, p_type):
+    def _list_to_value(p_values, sampling, p_type):
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _compute_topic_stability(self):
