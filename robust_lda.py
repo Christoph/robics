@@ -43,8 +43,10 @@ tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
 
 # Initialize and fit the data
-topics = RobustTopics()
-topics.fit(X_lda=tf, X_nmf=tfidf)
+topics = RobustTopics(n_iterations=4)
+topics.load_sklearn_lda_data(tf, 5)
+topics.load_sklearn_nmf_data(tfidf, 5, setup="complex")
+topics.fit_models()
 
 # Compare different samples
 # topics.stability_report
@@ -89,19 +91,13 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_iterations=10, n_relevant_top_words=30, rank_metric="kendalls", distribution_metric="jenson_shannon"):
+    def __init__(self, n_iterations=10, n_relevant_top_words=20, rank_metric="kendalls", distribution_metric="jenson_shannon"):
         self.n_iterations = n_iterations
         self.n_relevant_top_words = n_relevant_top_words
         self.rank_metric = rank_metric
         self.distribution_metric = distribution_metric
 
         self.models = {}
-
-        self.samples = []
-        self.topic_similarities = []
-        self.topic_terms = []
-        self.stability_report = []
-        self.full_stability_report = []
 
     def fit_models(self):
         """Fit the models
@@ -125,17 +121,17 @@ class RobustTopics():
                 print(sample)
 
                 for it in range(1, self.n_iterations+1):
-                    print("Iteration: "+str(it)+"/"+self.n_iterations)
+                    print("Iteration: "+str(it)+"/"+str(self.n_iterations))
 
                     if name == "sklearn_lda":
                         model_iterations.append(
-                            (LatentDirichletAllocation(sample).fit(settings["data"])))
+                            (LatentDirichletAllocation(**sample).fit(settings["data"])))
 
                     if name == "sklearn_nmf":
                         model_iterations.append(
-                            (NMF(sample).fit(settings["data"])))
+                            (NMF(**sample).fit(settings["data"])))
 
-                settings["models"] = model_iterations
+                settings["samples"].append(model_iterations)
 
         self._compute_topic_stability()
 
@@ -145,7 +141,9 @@ class RobustTopics():
         model_informations = {
             "n_samples": n_samples,
             "data": X,
-            "models": None
+            "samples": [],
+            "report": [],
+            "report_full": []
         }
 
         if setup == "simple":
@@ -174,7 +172,9 @@ class RobustTopics():
         model_informations = {
             "n_samples": n_samples,
             "data": X,
-            "models": None
+            "samples": [],
+            "report": [],
+            "report_full": []
         }
 
         if setup == "simple":
@@ -183,8 +183,6 @@ class RobustTopics():
                 {"type": int, "mode": "range", "values": [5, 50]},
                 "init":
                 {"type": str, "mode": "fixed", "values": "random"},
-                "beta_loss":
-                {"type": str, "mode": "fixed", "values": "kullback-leibler"}
             }
 
         if setup == "complex":
@@ -194,6 +192,8 @@ class RobustTopics():
                 "init":
                 {"type": str, "mode": "list", "values": [
                     "random", "nndsvd", "nndsvda", None]},
+                "solver":
+                {"type": str, "mode": "fixed", "values": "mu"},
                 "beta_loss":
                 {"type": str, "mode": "list", "values": [
                     "frobenius", "kullback-leibler"]}
@@ -240,101 +240,109 @@ class RobustTopics():
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _compute_topic_stability(self):
-        ranking_vecs = self._create_ranking_vectors()
+        for name, settings in self.models.items():
+            ranking_vecs = self._create_ranking_vectors(settings)
 
-        for sample_id, sample in enumerate(self.samples):
-            n_topics = sample[0].n_components
-            terms = []
-            term_distributions = []
-            ranking = []
-            distribution = []
-            similarities = []
-            report = {}
-            report_full = {}
+            for sample_id, sample in enumerate(settings["samples"]):
+                n_topics = sample[0].n_components
+                terms = []
+                term_distributions = []
+                ranking = []
+                distribution = []
+                similarities = []
+                report = {}
+                report_full = {}
 
-            # Get all top terms and distributions
-            for model in sample:
-                terms.append(self._get_top_terms(
-                    model, self.n_relevant_top_words))
+                # Get all top terms and distributions
+                for model in sample:
+                    terms.append(self._get_top_terms(
+                        model, self.n_relevant_top_words))
 
-                term_distributions.append(
-                    model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
+                    term_distributions.append(
+                        model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
 
-            self.topic_terms.append(np.array(terms))
+                # self.topic_terms.append(np.array(terms))
 
-            # Evaluate each topic
-            for topic in range(n_topics):
-                sim = pdist(np.array(terms)[
-                    :, topic, :], self._jaccard_similarity)
-                similarities.append(sim)
+                # Evaluate each topic
+                for topic in range(n_topics):
+                    sim = pdist(np.array(terms)[
+                        :, topic, :], self._jaccard_similarity)
+                    similarities.append(sim)
 
-                if self.distribution_metric == "jenson_shannon":
-                    jen = pdist(np.array(term_distributions)[
-                        :, topic, :], self._jenson_similarity)
-                    distribution.append(jen)
-                if self.distribution_metric == "wasserstein":
-                    jen = pdist(np.array(term_distributions)[
-                        :, topic, :], self._wasserstein_similarity)
-                    distribution.append(jen)
+                    if self.distribution_metric == "jenson_shannon":
+                        jen = pdist(np.array(term_distributions)[
+                            :, topic, :], self._jenson_similarity)
+                        distribution.append(jen)
+                    if self.distribution_metric == "wasserstein":
+                        jen = pdist(np.array(term_distributions)[
+                            :, topic, :], self._wasserstein_similarity)
+                        distribution.append(jen)
 
-                if self.rank_metric == "kendalls":
-                    rank = pdist(ranking_vecs[sample_id][
-                        :, topic, :], self._kendalls)
-                    ranking.append(rank)
+                    if self.rank_metric == "kendalls":
+                        rank = pdist(ranking_vecs[sample_id][
+                            :, topic, :], self._kendalls)
+                        ranking.append(rank)
 
-                if self.rank_metric == "spearman":
-                    spear = pdist(ranking_vecs[sample_id][
-                        :, topic, :], self._spear)
-                    ranking.append(spear)
+                    if self.rank_metric == "spearman":
+                        spear = pdist(ranking_vecs[sample_id][
+                            :, topic, :], self._spear)
+                        ranking.append(spear)
 
-            kendalls_ranking = np.array(ranking)
-            similarities = np.array(similarities)
-            jenson = np.array(distribution)
-            self.topic_similarities.append(similarities)
+                kendalls_ranking = np.array(ranking)
+                similarities = np.array(similarities)
+                jenson = np.array(distribution)
+                # self.topic_similarities.append(similarities)
 
-            if isinstance(sample[0], LatentDirichletAllocation):
-                report["model"] = "LDA"
-                report_full["model"] = "LDA"
+                if isinstance(sample[0], LatentDirichletAllocation):
+                    report["model"] = "LDA"
+                    report_full["model"] = "LDA"
 
-            if isinstance(sample[0], NMF):
-                report["model"] = "NMF"
-                report_full["model"] = "NMF"
+                if isinstance(sample[0], NMF):
+                    report["model"] = "NMF"
+                    report_full["model"] = "NMF"
 
-            report["sample_id"] = sample_id
-            report["n_topics"] = n_topics
+                report["sample_id"] = sample_id
+                report["n_topics"] = n_topics
+                report["params"] = settings["sampling"][sample_id]
 
-            report["jaccard"] = similarities.mean()
-            report["jaccard_std"] = similarities.std()
-            report[self.rank_metric] = kendalls_ranking.mean()
-            report[self.rank_metric+"_std"] = kendalls_ranking.std()
-            report[self.distribution_metric] = jenson.mean()
-            report[self.distribution_metric+"_std"] = jenson.std()
+                report["jaccard"] = similarities.mean()
+                report["jaccard_std"] = similarities.std()
+                report[self.rank_metric] = kendalls_ranking.mean()
+                report[self.rank_metric+"_std"] = kendalls_ranking.std()
+                report[self.distribution_metric] = jenson.mean()
+                report[self.distribution_metric+"_std"] = jenson.std()
 
-            report_full["sample_id"] = sample_id
-            report_full["n_topics"] = n_topics
+                report_full["sample_id"] = sample_id
+                report_full["n_topics"] = n_topics
+                report_full["params"] = settings["sampling"][sample_id]
 
-            report_full["jaccard"] = similarities.mean()
-            report_full["kendalls"] = kendalls_ranking.mean()
-            report_full["jenson"] = jenson.mean()
+                report_full["jaccard"] = similarities.mean()
+                report_full["kendalls"] = kendalls_ranking.mean()
+                report_full["jenson"] = jenson.mean()
 
-            report_full["jaccard_min"] = similarities.min(axis=1)
-            report_full["jaccard_max"] = similarities.max(axis=1)
-            report_full["jaccard_mean"] = similarities.mean(axis=1)
-            report_full["jaccard_std"] = similarities.std(axis=1)
-            report_full[self.rank_metric+"_min"] = kendalls_ranking.min(axis=1)
-            report_full[self.rank_metric+"_max"] = kendalls_ranking.max(axis=1)
-            report_full[self.rank_metric +
-                        "_mean"] = kendalls_ranking.mean(axis=1)
-            report_full[self.rank_metric+"_std"] = kendalls_ranking.std(axis=1)
-            report_full[self.distribution_metric+"_min"] = jenson.min(axis=1)
-            report_full[self.distribution_metric +
-                        "_max"] = jenson.max(axis=1)
-            report_full[self.distribution_metric+"_mean"] = jenson.mean(axis=1)
-            report_full[self.distribution_metric +
-                        "_std"] = jenson.std(axis=1)
+                report_full["jaccard_min"] = similarities.min(axis=1)
+                report_full["jaccard_max"] = similarities.max(axis=1)
+                report_full["jaccard_mean"] = similarities.mean(axis=1)
+                report_full["jaccard_std"] = similarities.std(axis=1)
+                report_full[self.rank_metric +
+                            "_min"] = kendalls_ranking.min(axis=1)
+                report_full[self.rank_metric +
+                            "_max"] = kendalls_ranking.max(axis=1)
+                report_full[self.rank_metric +
+                            "_mean"] = kendalls_ranking.mean(axis=1)
+                report_full[self.rank_metric +
+                            "_std"] = kendalls_ranking.std(axis=1)
+                report_full[self.distribution_metric +
+                            "_min"] = jenson.min(axis=1)
+                report_full[self.distribution_metric +
+                            "_max"] = jenson.max(axis=1)
+                report_full[self.distribution_metric +
+                            "_mean"] = jenson.mean(axis=1)
+                report_full[self.distribution_metric +
+                            "_std"] = jenson.std(axis=1)
 
-            self.stability_report.append(report)
-            self.full_stability_report.append(report_full)
+                settings["report"].append(report)
+                settings["report_full"].append(report_full)
 
     def rank_models(self, weights=[1, 1, 1]):
         return sorted(self.stability_report, key=lambda s: (s["jaccard"]*weights[0] + s[self.rank_metric]*weights[1] + s[self.distribution_metric]*weights[2])/np.sum(weights), reverse=True)
@@ -357,12 +365,12 @@ class RobustTopics():
             print(" ".join([feature_names[i]
                             for i in topic.argsort()[:-no_top_words - 1:-1]]))
 
-    def _create_ranking_vectors(self):
+    def _create_ranking_vectors(self, settings):
         vocab = set()
         sample_terms = []
         ranking_vecs = []
 
-        for sample in self.samples:
+        for sample in settings["samples"]:
             terms = []
             for model in sample:
                 top_terms = self._get_top_terms(
