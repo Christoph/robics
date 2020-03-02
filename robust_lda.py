@@ -4,6 +4,7 @@
 #
 # License: MIT
 
+import math
 import numpy as np
 from sklearn.decomposition import LatentDirichletAllocation, NMF
 from scipy.spatial.distance import pdist
@@ -139,25 +140,23 @@ class RobustTopics():
 
         return self
 
-    def load_sklearn_lda_data(self, X, setup="simple", custom_params= None):
+    def load_sklearn_lda_data(self, X, setup="simple", custom_params=None):
         self.X_lda = X
 
         if setup == "simple":
             self.params_lda = {
                 "n_components": [5, 50]
-                }
+            }
 
-    def load_sklearn_nmf_data(self, X, setup="simple", custom_params= None):
+    def load_sklearn_nmf_data(self, X, setup="simple", custom_params=None):
         self.X_nmf = X
 
         if setup == "simple":
             self.params_nmf = {
-                "n_components": [5, 50],
+                "n_components": {"type": int, "mode": "range", "values": [5, 50]},
                 "init": ["random", "nndsvd", "nndsvda", None],
                 "beta_loss": ["frobenius", "kullback-leibler"]
-                }
-        
-        
+            }
 
     def _compute_params(self):
         seq = []
@@ -177,6 +176,15 @@ class RobustTopics():
                 vec[0] * (self.n_components[1] - self.n_components[0]) + self.n_components[0])))
 
         return seq
+
+    @staticmethod
+    def _range_to_value(p_range, sampling, p_type):
+        value = p_range[0] + (p_range[1] - p_range[0]) * sampling
+        return int(value) if p_type is int else value
+
+    @staticmethod
+    def _categories_to_value(p_values, sampling, p_type):
+        return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _compute_topic_stability(self):
         ranking_vecs = self._create_ranking_vectors()
