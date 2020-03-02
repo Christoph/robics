@@ -147,6 +147,22 @@ class RobustTopics():
             self.params_lda = {
                 "n_components": [5, 50]
             }
+        if setup == "simple":
+            self.params_lda = {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]}
+            }
+
+        if setup == "complex":
+            self.params_lda = {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "learning_decayfloat":
+                {"type": float, "mode": "range", "values": [0.51, 1]}
+            }
+
+        if setup == "custom":
+            self.params_lda = custom_params
 
     def load_sklearn_nmf_data(self, X, setup="simple", custom_params=None):
         self.X_nmf = X
