@@ -6,6 +6,7 @@
 
 import math
 import numpy as np
+from collections import Counter
 from sklearn.decomposition import LatentDirichletAllocation, NMF
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import jensenshannon
@@ -18,7 +19,7 @@ Sources who show how to use Topic models
 https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
 
 
-TEST CODE
+EXAMPLE CODE
 
 from sklearn.datasets import fetch_20newsgroups
 
@@ -266,7 +267,6 @@ class RobustTopics():
                         model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
 
                 settings["topic_terms"].append(np.array(terms))
-                settings["topic_dist"] = np.array(term_distributions)
 
                 # Evaluate each topic
                 for topic in range(n_topics):
@@ -424,17 +424,26 @@ class RobustTopics():
                 not_finite.add("energy")
         return list(not_finite)
 
-    def analyse_sample(self, model, sample_id, feature_names):
-        print("Intersecting words for each topic")
+    def analyse_sample(self, model, sample_id, feature_names, occurence_percent=1):
+        print("Words per topic appearing at least in ",
+              occurence_percent, " of all runs.")
+
+        n_topics = len(self.models[model]["samples"][sample_id][0].components_)
+        n_runs = len(self.models[model]["samples"][sample_id])
 
         # Intersect each topic
-        for topic in range(len(self.models[model]["samples"][sample_id][0].components_)):
-            inter = set(self.models[model]["topic_terms"][sample_id][topic][0])
+        for topic in range(n_topics):
+            word_list = []
             for terms in self.models[model]["topic_terms"][sample_id]:
-                inter.intersection_update(set(list(terms[topic])))
+                word_list.extend(terms[topic])
 
-            print("Topic: " + str(topic))
-            print(" ".join([feature_names[i] for i in inter]))
+            counter = Counter(word_list)
+            selected_words = filter(lambda x: counter[x] >= n_runs *
+                                    occurence_percent, counter)
+
+            print("Topic - " + str(topic))
+            print(" ".join([feature_names[i] + "("+str(counter[i])+")"
+                            for i in selected_words]))
 
     def display_topics(self, model, sample_id, model_number, feature_names, no_top_words):
         for topic_idx, topic in enumerate(self.models[model]["samples"][sample_id][model_number].components_):
