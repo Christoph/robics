@@ -50,7 +50,7 @@ topics.fit_models()
 
 # Compare different samples
 # topics.stability_report
-topics.rank_models("mean")
+topics.rank_models()
 
 # Look at topics for a specific model
 topics.analyse_sample("sklearn_nmf", 0, tfidf_feature_names)
@@ -300,7 +300,7 @@ class RobustTopics():
                 report["params"] = settings["sampling"][sample_id]
 
                 report["jaccard"] = jaccard_similarity.mean()
-                report["kendallstau"] = kendalls_ranking.mean()
+                report["kendalltau"] = kendalls_ranking.mean()
                 report["spearman"] = spearman_ranking.mean()
                 report["jensenshannon"] = jensen_similarity.mean()
                 report["wasserstein"] = wasserstein_similarity.mean()
@@ -344,16 +344,65 @@ class RobustTopics():
                 settings["report"].append(report)
                 settings["report_full"].append(report_full)
 
-    def rank_models(self, weights=[1, 1, 1], ranking={
+    def rank_models(self, weights={
         "jensenshannon": 1,
         "jaccard": 1,
             "kendalltau": 1}):
         all_reports = []
 
-        for settings in self.models.values():
-            all_reports.extend(settings["report"])
+        for model in self.models:
+            all_reports.extend(self.models[model]["report"])
 
-        return sorted(all_reports, key=lambda s: (s["jaccard"]*weights[0] + s[self.rank_metric]*weights[1] + s[self.distribution_metric]*weights[2])/np.sum(weights), reverse=True)
+        nf = self._check_for_finite(all_reports)
+
+        if "jaccard" in weights and "jaccard" in nf:
+            del weights["jaccard"]
+            print("Dropped jaccard from ranking as it has non-finite values.")
+        if "jensenshannon" in weights and "jensenshannon" in nf:
+            del weights["jensenshannon"]
+            print("Dropped jensenshannon from ranking as it has non-finite values.")
+        if "wasserstein" in weights and "wasserstein" in nf:
+            del weights["wasserstein"]
+            print("Dropped wasserstein from ranking as it has non-finite values.")
+        if "kendalltau" in weights and "kendalltau" in nf:
+            del weights["kendalltau"]
+            print("Dropped kendalltau from ranking as it has non-finite values.")
+        if "spearman" in weights and "spearman" in nf:
+            del weights["spearman"]
+            print("Dropped spearman from ranking as it has non-finite values.")
+
+        return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
+
+    @staticmethod
+    def _linear_combination_of_reports(weights, report):
+        total_weight = 0
+        combination = 0
+        for property, weight in weights.items():
+            total_weight += weight
+            combination += report[property]
+
+        return combination / total_weight
+
+    @staticmethod
+    def _check_for_finite(reports):
+        not_finite = set()
+        for report in reports:
+            if not np.isfinite(report["jaccard"]):
+                print("Jaccard similarity has non-finite numbers. Cannot be used.")
+                not_finite.add("jaccard")
+            if not np.isfinite(report["kendalltau"]):
+                print("Kendalltau ranking has non-finite numbers. Cannot be used.")
+                not_finite.add("kendalltau")
+            if not np.isfinite(report["spearman"]):
+                print("Spearman ranking has non-finite numbers. Cannot be used.")
+                not_finite.add("spearman")
+            if not np.isfinite(report["jensenshannon"]):
+                print("Jensenshannon similarity has non-finite numbers. Cannot be used.")
+                not_finite.add("jensenshannon")
+            if not np.isfinite(report["wasserstein"]):
+                print("Wasserstein similarity has non-finite numbers. Cannot be used.")
+                not_finite.add("wasserstein")
+        return list(not_finite)
 
     def analyse_sample(self, model, sample_id, feature_names):
         print("Intersecting words for each topic")
