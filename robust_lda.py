@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.decomposition import LatentDirichletAllocation, NMF
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import jensenshannon
-from scipy.stats import kendalltau, spearmanr, wasserstein_distance
+from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_distance
 import sobol_seq
 
 """
@@ -62,8 +62,8 @@ pd.DataFrame.from_records(topics.stability_report)
 import plotly.express as px
 def show_stability_histograms(self):
     for sample in self.rank_models():
-        fig = px.histogram(data_frame=sample["mean"], x=0, nbins=10, range_x=[
-                        0, 1], title="Model: "+sample["model"]+" Topics: "+str(sample["n_topics"]) + " Mean: "+str(sample["mean/overall"]))
+        fig = px.histogram(data_frame=ARRAY, x=0, nbins=10, range_x=[
+                        0, 1])
         fig.show()
 
 """
@@ -251,6 +251,7 @@ class RobustTopics():
                 spearman = []
                 jensen = []
                 wasserstein = []
+                energy = []
                 jaccard = []
 
                 report = {}
@@ -265,6 +266,7 @@ class RobustTopics():
                         model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
 
                 settings["topic_terms"].append(np.array(terms))
+                settings["topic_dist"] = np.array(term_distributions)
 
                 # Evaluate each topic
                 for topic in range(n_topics):
@@ -280,6 +282,10 @@ class RobustTopics():
                         :, topic, :], self._wasserstein_similarity)
                     wasserstein.append(wasser)
 
+                    en = pdist(np.array(term_distributions)[
+                        :, topic, :], self._energy_similarity)
+                    energy.append(en)
+
                     ken = pdist(ranking_vecs[sample_id][
                         :, topic, :], self._kendalls)
                     kendalls.append(ken)
@@ -293,6 +299,7 @@ class RobustTopics():
                 jaccard_similarity = np.array(jaccard)
                 jensen_similarity = np.array(jensen)
                 wasserstein_similarity = np.array(wasserstein)
+                energy_similarity = np.array(energy)
 
                 report["model"] = name
                 report["sample_id"] = sample_id
@@ -304,6 +311,7 @@ class RobustTopics():
                 report["spearman"] = spearman_ranking.mean()
                 report["jensenshannon"] = jensen_similarity.mean()
                 report["wasserstein"] = wasserstein_similarity.mean()
+                report["energy"] = energy_similarity.mean()
 
                 report_full["model"] = name
                 report_full["sample_id"] = sample_id
@@ -340,6 +348,12 @@ class RobustTopics():
                     "min": wasserstein_similarity.min(axis=1),
                     "max": wasserstein_similarity.max(axis=1),
                 }
+                report_full["energy"] = {
+                    "mean": energy_similarity.mean(axis=1),
+                    "std": energy_similarity.std(axis=1),
+                    "min": energy_similarity.min(axis=1),
+                    "max": energy_similarity.max(axis=1),
+                }
 
                 settings["report"].append(report)
                 settings["report_full"].append(report_full)
@@ -364,6 +378,9 @@ class RobustTopics():
         if "wasserstein" in weights and "wasserstein" in nf:
             del weights["wasserstein"]
             print("Dropped wasserstein from ranking as it has non-finite values.")
+        if "energy" in weights and "energy" in nf:
+            del weights["energy"]
+            print("Dropped energy from ranking as it has non-finite values.")
         if "kendalltau" in weights and "kendalltau" in nf:
             del weights["kendalltau"]
             print("Dropped kendalltau from ranking as it has non-finite values.")
@@ -402,6 +419,9 @@ class RobustTopics():
             if not np.isfinite(report["wasserstein"]):
                 print("Wasserstein similarity has non-finite numbers. Cannot be used.")
                 not_finite.add("wasserstein")
+            if not np.isfinite(report["energy"]):
+                print("Energy similarity has non-finite numbers. Cannot be used.")
+                not_finite.add("energy")
         return list(not_finite)
 
     def analyse_sample(self, model, sample_id, feature_names):
@@ -465,12 +485,19 @@ class RobustTopics():
 
     @staticmethod
     def _jenson_similarity(a, b):
-        distance = jensenshannon(a, b)
+        # Added rounding because without often inf was the result
+        # Usage of base 2 algorithm so that the range is [0, 1]
+        distance = jensenshannon(a.round(12), b.round(12), base=2)
         return 1 - distance
 
     @staticmethod
     def _wasserstein_similarity(a, b):
         distance = wasserstein_distance(a, b)
+        return 1 - distance
+
+    @staticmethod
+    def _energy_similarity(a, b):
+        distance = energy_distance(a, b)
         return 1 - distance
 
     @staticmethod
