@@ -14,32 +14,6 @@ from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_dist
 import sobol_seq
 
 
-from sklearn.decomposition import LatentDirichletAllocation, NMF
-
-# Build the LDA model
-lda_model = models.LdaModel(
-    corpus=corpus, num_topics=10, id2word=dictionary)
-
-# Build the LSI model
-lsi_model = models.LsiModel(
-    corpus=corpus, num_topics=10, id2word=dictionary)
-
-print("LDA Model:")
-
-for idx in range(10):
-    # Print the first 10 most representative topics
-    print("Topic #%s:" % idx, lda_model.print_topic(idx, 10))
-
-print("=" * 20)
-
-print("LSI Model:")
-
-for idx in range(10):
-    # Print the first 10 most representative topics
-    print("Topic #%s:" % idx, lsi_model.print_topic(idx, 10))
-
-print("=" * 20)
-
 """
 Sources who show how to use Topic models
 
@@ -84,15 +58,12 @@ dictionary = corpora.Dictionary(tokenized_data)
 corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 
 # TOPIC MODELLING
-robustTopics = RobustTopics(n_iterations=4)
-robustTopics.load_sklearn_lda_data(tf, 5)
-robustTopics.load_sklearn_nmf_data(tfidf, 5, setup="complex")
-robustTopics.fit_models()
-
 robustTopics = RobustTopics()
+
 robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=4)
-robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4).fit_models_new().rank_models()
-robustTopics.models_new
+robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4)
+
+robustTopics.fit_models()
 
 # Compare different samples
 # topics.stability_report
@@ -136,12 +107,10 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_iterations=10, n_relevant_top_words=20):
-        self.n_iterations = n_iterations
+    def __init__(self, n_relevant_top_words=20):
         self.n_relevant_top_words = n_relevant_top_words
 
-        self.models = {}
-        self.models_new = []
+        self.models = []
 
     def fit_models(self):
         """Fit the models
@@ -157,41 +126,17 @@ class RobustTopics():
             Returns self.
         """
 
-        for name, settings in self.models.items():
-            print("Model: " + name)
-
-            for sample in settings["sampling"]:
-                model_iterations = []
-                print(sample)
-
-                for it in range(1, self.n_iterations+1):
-                    print("Iteration: "+str(it)+"/"+str(self.n_iterations))
-
-                    if name == "sklearn_lda":
-                        model_iterations.append(
-                            (LatentDirichletAllocation(**sample).fit(settings["data"])))
-
-                    if name == "sklearn_nmf":
-                        model_iterations.append(
-                            (NMF(**sample).fit(settings["data"])))
-
-                settings["samples"].append(model_iterations)
-
-        self._compute_topic_stability()
-
-        return self
-
-    def fit_models_new(self):
-        for model in self.models_new:
+        for model in self.models:
+            print("")
             print("Model: ", model.topic_model_class)
 
             for sample in model.sampling_parameters:
                 sample_initializations = []
-                print(sample)
-                print("Iterations:", end=" ")
+                print(sample, end=" - ")
+                print(str(model.n_initializations)+" Iterations:", end=" ")
 
                 for it in range(1, model.n_initializations+1):
-                    print(it, "/", model.n_initializations, end=" ")
+                    print(str(it), end=" ")
 
                     if model.source_lib == "sklearn":
                         sample_initializations.append(
@@ -202,9 +147,9 @@ class RobustTopics():
                             corpus=model.data, id2word=model.word_mapping, **sample))
 
                 model.samples.append(sample_initializations)
-                print("---")
+                print("")
 
-        # self._compute_topic_stability()
+        self._compute_topic_stability()
 
         return self
 
@@ -233,7 +178,7 @@ class RobustTopics():
         topic = TopicModel(
             "gensim", LdaModel_class, corpus, dictionary, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
 
-        self.models_new.append(topic)
+        self.models.append(topic)
 
         return self
 
@@ -262,81 +207,9 @@ class RobustTopics():
         topic = TopicModel(
             "sklearn", LatentDirichletAllocation_class, document_vectors, vectorizer, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
 
-        self.models_new.append(topic)
+        self.models.append(topic)
 
         return self
-
-    def load_sklearn_lda_data(self, X, n_samples, setup="simple", custom_params=None):
-        model_informations = {
-            "n_samples": n_samples,
-            "data": X,
-            "samples": [],
-            "topic_terms": [],
-            "report": [],
-            "report_full": []
-        }
-
-        if setup == "simple":
-            model_informations["params"] = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 20]}
-            }
-
-        if setup == "complex":
-            model_informations["params"] = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "learning_decayfloat":
-                {"type": float, "mode": "range", "values": [0.51, 1]}
-            }
-
-        if setup == "custom":
-            model_informations["params"] = custom_params
-
-        model_informations["sampling"] = self._compute_param_combinations(
-            model_informations["params"], n_samples)
-
-        self.models["sklearn_lda"] = model_informations
-
-    def load_sklearn_nmf_data(self, X, n_samples, setup="simple", custom_params=None):
-        model_informations = {
-            "n_samples": n_samples,
-            "data": X,
-            "samples": [],
-            "topic_terms": [],
-            "report": [],
-            "report_full": []
-        }
-
-        if setup == "simple":
-            model_informations["params"] = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "init":
-                {"type": str, "mode": "fixed", "values": "random"},
-            }
-
-        if setup == "complex":
-            model_informations["params"] = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "init":
-                {"type": str, "mode": "list", "values": [
-                    "random", "nndsvd", "nndsvda", None]},
-                "solver":
-                {"type": str, "mode": "fixed", "values": "mu"},
-                "beta_loss":
-                {"type": str, "mode": "list", "values": [
-                    "frobenius", "kullback-leibler"]}
-            }
-
-        if setup == "custom":
-            model_informations["params"] = custom_params
-
-        model_informations["sampling"] = self._compute_param_combinations(
-            model_informations["params"], n_samples)
-
-        self.models["sklearn_nmf"] = model_informations
 
     def _compute_param_combinations(self, params, n_samples):
         seq = []
@@ -371,13 +244,20 @@ class RobustTopics():
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _compute_topic_stability(self):
-        for name, settings in self.models.items():
-            ranking_vecs = self._create_ranking_vectors(settings)
+        for model in self.models:
+            self._fetch_top_terms(model, 20)
+            model_distributions = self._fetch_term_distributions(model)
+            ranking_vecs = self._create_ranking_vectors(model)
 
-            for sample_id, sample in enumerate(settings["samples"]):
-                n_topics = sample[0].n_components
-                terms = []
-                term_distributions = []
+            for sample_id, sample in enumerate(model.samples):
+                n_topics = 0
+                if model.source_lib == "sklearn":
+                    n_topics = sample[0].n_components
+                if model.source_lib == "gensim":
+                    n_topics = sample[0].num_topics
+
+                terms = model.topic_terms[sample_id]
+                term_distributions = model_distributions[sample_id]
 
                 kendalls = []
                 spearman = []
@@ -389,31 +269,21 @@ class RobustTopics():
                 report = {}
                 report_full = {}
 
-                # Get all top terms and distributions
-                for model in sample:
-                    terms.append(self._get_top_terms(
-                        model, self.n_relevant_top_words))
-
-                    term_distributions.append(
-                        model.components_ / model.components_.sum(axis=1)[:, np.newaxis])
-
-                settings["topic_terms"].append(np.array(terms))
-
                 # Evaluate each topic
                 for topic in range(n_topics):
-                    sim = pdist(np.array(terms)[
+                    sim = pdist(terms[
                         :, topic, :], self._jaccard_similarity)
                     jaccard.append(sim)
 
-                    jen = pdist(np.array(term_distributions)[
+                    jen = pdist(term_distributions[
                         :, topic, :], self._jenson_similarity)
                     jensen.append(jen)
 
-                    wasser = pdist(np.array(term_distributions)[
+                    wasser = pdist(term_distributions[
                         :, topic, :], self._wasserstein_similarity)
                     wasserstein.append(wasser)
 
-                    en = pdist(np.array(term_distributions)[
+                    en = pdist(term_distributions[
                         :, topic, :], self._energy_similarity)
                     energy.append(en)
 
@@ -432,10 +302,10 @@ class RobustTopics():
                 wasserstein_similarity = np.array(wasserstein)
                 energy_similarity = np.array(energy)
 
-                report["model"] = name
+                report["model"] = model.topic_model_class
                 report["sample_id"] = sample_id
                 report["n_topics"] = n_topics
-                report["params"] = settings["sampling"][sample_id]
+                report["params"] = model.sampling_parameters[sample_id]
 
                 report["jaccard"] = jaccard_similarity.mean()
                 report["kendalltau"] = kendalls_ranking.mean()
@@ -444,10 +314,10 @@ class RobustTopics():
                 report["wasserstein"] = wasserstein_similarity.mean()
                 report["energy"] = energy_similarity.mean()
 
-                report_full["model"] = name
+                report_full["model"] = model.topic_model_class
                 report_full["sample_id"] = sample_id
                 report_full["n_topics"] = n_topics
-                report_full["params"] = settings["sampling"][sample_id]
+                report_full["params"] = model.sampling_parameters[sample_id]
 
                 report_full["jaccard"] = {
                     "mean": jaccard_similarity.mean(axis=1),
@@ -486,8 +356,8 @@ class RobustTopics():
                     "max": energy_similarity.max(axis=1),
                 }
 
-                settings["report"].append(report)
-                settings["report_full"].append(report_full)
+                model.report.append(report)
+                model.report_full.append(report_full)
 
     def rank_models(self, weights={
         "jensenshannon": 1,
@@ -496,7 +366,7 @@ class RobustTopics():
         all_reports = []
 
         for model in self.models:
-            all_reports.extend(self.models[model]["report"])
+            all_reports.extend(model.report)
 
         nf = self._check_for_finite(all_reports)
 
@@ -582,18 +452,57 @@ class RobustTopics():
             print(" ".join([feature_names[i]
                             for i in topic.argsort()[:-no_top_words - 1:-1]]))
 
-    def _create_ranking_vectors(self, settings):
+    def _fetch_top_terms(self, model, n_top_terms):
+        model_terms = []
+        for sample in model.samples:
+            terms = []
+            for instance in sample:
+                if model.source_lib == "sklearn":
+                    top_terms = self._get_top_terms(
+                        instance, n_top_terms)
+                    terms.append(top_terms)
+                if model.source_lib == "gensim":
+                    top_terms = []
+                    for topic_id in range(instance.num_topics):
+                        top_terms.append([x[0] for x in instance.get_topic_terms(
+                            topic_id, n_top_terms)])
+                    terms.append(top_terms)
+            model_terms.append(np.array(terms))
+        model.topic_terms = model_terms
+
+    def _fetch_term_distributions(self, model):
+        model_distributions = []
+        for sample in model.samples:
+            term_distributions = []
+            for instance in sample:
+                if model.source_lib == "sklearn":
+                    term_distributions.append(
+                        instance.components_ / instance.components_.sum(axis=1)[:, np.newaxis])
+                if model.source_lib == "gensim":
+                    term_distributions.append(instance.get_topics())
+            model_distributions.append(np.array(term_distributions))
+        return model_distributions
+
+    def _create_ranking_vectors(self, model):
         vocab = set()
         sample_terms = []
         ranking_vecs = []
 
-        for sample in settings["samples"]:
+        for sample in model.samples:
             terms = []
-            for model in sample:
-                top_terms = self._get_top_terms(
-                    model, self.n_relevant_top_words)
-                terms.append(top_terms)
-                vocab.update([e for l in top_terms for e in l])
+            for instance in sample:
+                if model.source_lib == "sklearn":
+                    top_terms = self._get_top_terms(
+                        instance, self.n_relevant_top_words)
+                    terms.append(top_terms)
+                    vocab.update([e for l in top_terms for e in l])
+                if model.source_lib == "gensim":
+                    top_terms = []
+                    for topic_id in range(instance.num_topics):
+                        top_terms.append([x[0] for x in instance.get_topic_terms(
+                            topic_id, self.n_relevant_top_words)])
+                        terms.append(top_terms)
+                    vocab.update([e for l in top_terms for e in l])
             sample_terms.append(terms)
 
         vocab_vec = list(vocab)
