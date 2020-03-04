@@ -5,13 +5,40 @@
 # License: MIT
 
 import math
-import numpy as np
 from collections import Counter
-from sklearn.decomposition import LatentDirichletAllocation, NMF
+
+import numpy as np
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_distance
 import sobol_seq
+
+
+from sklearn.decomposition import LatentDirichletAllocation, NMF
+
+# Build the LDA model
+lda_model = models.LdaModel(
+    corpus=corpus, num_topics=10, id2word=dictionary)
+
+# Build the LSI model
+lsi_model = models.LsiModel(
+    corpus=corpus, num_topics=10, id2word=dictionary)
+
+print("LDA Model:")
+
+for idx in range(10):
+    # Print the first 10 most representative topics
+    print("Topic #%s:" % idx, lda_model.print_topic(idx, 10))
+
+print("=" * 20)
+
+print("LSI Model:")
+
+for idx in range(10):
+    # Print the first 10 most representative topics
+    print("Topic #%s:" % idx, lsi_model.print_topic(idx, 10))
+
+print("=" * 20)
 
 """
 Sources who show how to use Topic models
@@ -22,13 +49,17 @@ https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
 EXAMPLE CODE
 
 from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation, NMF
+from gensim.models import LdaModel, LsiModel
+from gensim.utils import simple_preprocess
+from gensim import corpora
 
 dataset = fetch_20newsgroups(
     shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
 documents = dataset.data[:100]
 
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-
+# SKLEARN
 no_features = 1000
 
 # NMF is able to use tf-idf
@@ -43,11 +74,25 @@ tf_vectorizer = CountVectorizer(
 tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
 
-# Initialize and fit the data
-topics = RobustTopics(n_iterations=4)
-topics.load_sklearn_lda_data(tf, 5)
-topics.load_sklearn_nmf_data(tfidf, 5, setup="complex")
-topics.fit_models()
+# GENSIM
+def docs_to_words(docs):
+    for doc in docs:
+        yield(simple_preprocess(str(doc), deacc=True))
+
+tokenized_data = list(docs_to_words(documents))
+dictionary = corpora.Dictionary(tokenized_data)
+corpus = [dictionary.doc2bow(text) for text in tokenized_data]
+
+# TOPIC MODELLING
+robustTopics = RobustTopics(n_iterations=4)
+robustTopics.load_sklearn_lda_data(tf, 5)
+robustTopics.load_sklearn_nmf_data(tfidf, 5, setup="complex")
+robustTopics.fit_models()
+
+robustTopics = RobustTopics()
+robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=4)
+robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4).fit_models_new().rank_models()
+robustTopics.models_new
 
 # Compare different samples
 # topics.stability_report
@@ -96,6 +141,7 @@ class RobustTopics():
         self.n_relevant_top_words = n_relevant_top_words
 
         self.models = {}
+        self.models_new = []
 
     def fit_models(self):
         """Fit the models
@@ -135,6 +181,91 @@ class RobustTopics():
 
         return self
 
+    def fit_models_new(self):
+        for model in self.models_new:
+            print("Model: ", model.topic_model_class)
+
+            for sample in model.sampling_parameters:
+                sample_initializations = []
+                print(sample)
+                print("Iterations:", end=" ")
+
+                for it in range(1, model.n_initializations+1):
+                    print(it, "/", model.n_initializations, end=" ")
+
+                    if model.source_lib == "sklearn":
+                        sample_initializations.append(
+                            model.topic_model_class(**sample).fit(model.data))
+
+                    if model.source_lib == "gensim":
+                        sample_initializations.append(model.topic_model_class(
+                            corpus=model.data, id2word=model.word_mapping, **sample))
+
+                model.samples.append(sample_initializations)
+                print("---")
+
+        # self._compute_topic_stability()
+
+        return self
+
+    def load_gensim_LdaModel(self, LdaModel_class, corpus, dictionary, n_samples, n_initializations=10, setup="simple", custom_params=None):
+        parameters = {}
+        if setup == "simple":
+            parameters = {
+                "num_topics":
+                {"type": int, "mode": "range", "values": [5, 20]}
+            }
+
+        if setup == "complex":
+            parameters = {
+                "num_topics":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "decay":
+                {"type": float, "mode": "range", "values": [0.51, 1]}
+            }
+
+        if setup == "custom":
+            parameters = custom_params
+
+        sampling_parameters = self._compute_param_combinations(
+            parameters, n_samples)
+
+        topic = TopicModel(
+            "gensim", LdaModel_class, corpus, dictionary, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
+
+        self.models_new.append(topic)
+
+        return self
+
+    def load_sklearn_LatentDirichletAllocation(self, LatentDirichletAllocation_class, document_vectors, vectorizer, n_samples, n_initializations=10, setup="simple", custom_params=None):
+        parameters = {}
+        if setup == "simple":
+            parameters = {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 20]}
+            }
+
+        if setup == "complex":
+            parameters = {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "learning_decayfloat":
+                {"type": float, "mode": "range", "values": [0.51, 1]}
+            }
+
+        if setup == "custom":
+            parameters = custom_params
+
+        sampling_parameters = self._compute_param_combinations(
+            parameters, n_samples)
+
+        topic = TopicModel(
+            "sklearn", LatentDirichletAllocation_class, document_vectors, vectorizer, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
+
+        self.models_new.append(topic)
+
+        return self
+
     def load_sklearn_lda_data(self, X, n_samples, setup="simple", custom_params=None):
         model_informations = {
             "n_samples": n_samples,
@@ -148,7 +279,7 @@ class RobustTopics():
         if setup == "simple":
             model_informations["params"] = {
                 "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]}
+                {"type": int, "mode": "range", "values": [5, 20]}
             }
 
         if setup == "complex":
@@ -526,3 +657,19 @@ class RobustTopics():
             topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
 
         return topic_terms
+
+
+class TopicModel():
+    def __init__(self, source_lib, topic_model_class, data, word_mapping, parameters, sampling_parameters, n_samples, n_initializations, samples, topic_terms, report, report_full) -> None:
+        self.source_lib = source_lib
+        self.topic_model_class = topic_model_class
+        self.data = data
+        self.word_mapping = word_mapping
+        self.parameters = parameters
+        self.sampling_parameters = sampling_parameters
+        self.n_samples = n_samples
+        self.n_initializations = n_initializations
+        self.samples = samples
+        self.topic_terms = topic_terms
+        self.report = report
+        self.report_full = report_full
