@@ -61,7 +61,9 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 robustTopics = RobustTopics()
 
 robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=4)
+robustTopics.load_gensim_LdaModel(LsiModel, corpus, dictionary, 5, n_initializations=4)
 robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4)
+robustTopics.load_sklearn_LatentDirichletAllocation(NMF, tf, tf_vectorizer, 5, n_initializations=4)
 
 robustTopics.fit_models()
 
@@ -262,8 +264,6 @@ class RobustTopics():
                 kendalls = []
                 spearman = []
                 jensen = []
-                wasserstein = []
-                energy = []
                 jaccard = []
 
                 report = {}
@@ -279,14 +279,6 @@ class RobustTopics():
                         :, topic, :], self._jenson_similarity)
                     jensen.append(jen)
 
-                    wasser = pdist(term_distributions[
-                        :, topic, :], self._wasserstein_similarity)
-                    wasserstein.append(wasser)
-
-                    en = pdist(term_distributions[
-                        :, topic, :], self._energy_similarity)
-                    energy.append(en)
-
                     ken = pdist(ranking_vecs[sample_id][
                         :, topic, :], self._kendalls)
                     kendalls.append(ken)
@@ -299,8 +291,6 @@ class RobustTopics():
                 spearman_ranking = np.array(spearman)
                 jaccard_similarity = np.array(jaccard)
                 jensen_similarity = np.array(jensen)
-                wasserstein_similarity = np.array(wasserstein)
-                energy_similarity = np.array(energy)
 
                 report["model"] = model.topic_model_class
                 report["sample_id"] = sample_id
@@ -311,8 +301,6 @@ class RobustTopics():
                 report["kendalltau"] = kendalls_ranking.mean()
                 report["spearman"] = spearman_ranking.mean()
                 report["jensenshannon"] = jensen_similarity.mean()
-                report["wasserstein"] = wasserstein_similarity.mean()
-                report["energy"] = energy_similarity.mean()
 
                 report_full["model"] = model.topic_model_class
                 report_full["sample_id"] = sample_id
@@ -343,18 +331,6 @@ class RobustTopics():
                     "min": jensen_similarity.min(axis=1),
                     "max": jensen_similarity.max(axis=1),
                 }
-                report_full["wasserstein"] = {
-                    "mean": wasserstein_similarity.mean(axis=1),
-                    "std": wasserstein_similarity.std(axis=1),
-                    "min": wasserstein_similarity.min(axis=1),
-                    "max": wasserstein_similarity.max(axis=1),
-                }
-                report_full["energy"] = {
-                    "mean": energy_similarity.mean(axis=1),
-                    "std": energy_similarity.std(axis=1),
-                    "min": energy_similarity.min(axis=1),
-                    "max": energy_similarity.max(axis=1),
-                }
 
                 model.report.append(report)
                 model.report_full.append(report_full)
@@ -368,27 +344,6 @@ class RobustTopics():
         for model in self.models:
             all_reports.extend(model.report)
 
-        nf = self._check_for_finite(all_reports)
-
-        if "jaccard" in weights and "jaccard" in nf:
-            del weights["jaccard"]
-            print("Dropped jaccard from ranking as it has non-finite values.")
-        if "jensenshannon" in weights and "jensenshannon" in nf:
-            del weights["jensenshannon"]
-            print("Dropped jensenshannon from ranking as it has non-finite values.")
-        if "wasserstein" in weights and "wasserstein" in nf:
-            del weights["wasserstein"]
-            print("Dropped wasserstein from ranking as it has non-finite values.")
-        if "energy" in weights and "energy" in nf:
-            del weights["energy"]
-            print("Dropped energy from ranking as it has non-finite values.")
-        if "kendalltau" in weights and "kendalltau" in nf:
-            del weights["kendalltau"]
-            print("Dropped kendalltau from ranking as it has non-finite values.")
-        if "spearman" in weights and "spearman" in nf:
-            del weights["spearman"]
-            print("Dropped spearman from ranking as it has non-finite values.")
-
         return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
 
     @staticmethod
@@ -400,30 +355,6 @@ class RobustTopics():
             combination += report[property]
 
         return combination / total_weight
-
-    @staticmethod
-    def _check_for_finite(reports):
-        not_finite = set()
-        for report in reports:
-            if not np.isfinite(report["jaccard"]):
-                print("Jaccard similarity has non-finite numbers. Cannot be used.")
-                not_finite.add("jaccard")
-            if not np.isfinite(report["kendalltau"]):
-                print("Kendalltau ranking has non-finite numbers. Cannot be used.")
-                not_finite.add("kendalltau")
-            if not np.isfinite(report["spearman"]):
-                print("Spearman ranking has non-finite numbers. Cannot be used.")
-                not_finite.add("spearman")
-            if not np.isfinite(report["jensenshannon"]):
-                print("Jensenshannon similarity has non-finite numbers. Cannot be used.")
-                not_finite.add("jensenshannon")
-            if not np.isfinite(report["wasserstein"]):
-                print("Wasserstein similarity has non-finite numbers. Cannot be used.")
-                not_finite.add("wasserstein")
-            if not np.isfinite(report["energy"]):
-                print("Energy similarity has non-finite numbers. Cannot be used.")
-                not_finite.add("energy")
-        return list(not_finite)
 
     def analyse_sample(self, model, sample_id, feature_names, occurence_percent=1):
         print("Words per topic appearing at least in ",
