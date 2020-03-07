@@ -60,19 +60,18 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 # TOPIC MODELLING
 robustTopics = RobustTopics()
 
-robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=4)
-robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4)
-robustTopics.load_sklearn_LatentDirichletAllocation(NMF, tf, tf_vectorizer, 5, n_initializations=4)
+robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=6)
+robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
+robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=6)
 
 robustTopics.fit_models()
 
 # Compare different samples
-# topics.stability_report
 robustTopics.rank_models()
 
 # Look at the topics
-robustTopics.display_sample(0, 0)
-robustTopics.display_model_topics(0, 2, 1, 10)
+robustTopics.display_sample_topics(1, 0, 0.5)
+robustTopics.display_run_topics(0, 0, 0, 10)
 
 # Convert the report to a pandas dataframe
 pd.DataFrame.from_records(robustTopics.report)
@@ -229,26 +228,29 @@ class RobustTopics():
 
         return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
 
-    def display_sample(self, model_id, sample_id, occurence_percent=1):
+    def display_model_topics(self):
+        pass
+
+    def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
         model = self.models[model_id]
         print("Words per topic appearing at least in ",
-              occurence_percent, " of all runs.")
+              round(occurence_percent*100), "% of all runs.")
 
         n_topics = 0
         feature_names = []
         if model.source_lib == "sklearn":
-            n_topics = len(model["samples"][sample_id][0].components_)
-            feature_names = model.vectorizer.get_feature_names()
+            n_topics = len(model.samples[sample_id][0].components_)
+            feature_names = model.word_mapping.get_feature_names()
         if model.source_lib == "gensim":
-            n_topics = model["samples"][sample_id][0].num_topics
-            feature_names = []
+            n_topics = model.samples[sample_id][0].num_topics
+            feature_names = model.word_mapping.id2token
 
-        n_runs = len(self.models[model]["samples"][sample_id])
+        n_runs = len(model.samples[sample_id])
 
         # Intersect each topic
         for topic in range(n_topics):
             word_list = []
-            for terms in self.models[model]["topic_terms"][sample_id]:
+            for terms in model.topic_terms[sample_id]:
                 word_list.extend(terms[topic])
 
             counter = Counter(word_list)
@@ -256,22 +258,31 @@ class RobustTopics():
                                     occurence_percent, counter)
 
             print("Topic - " + str(topic))
+            print_data = {}
+            for i in selected_words:
+                count = counter[i]
+                word = feature_names[i]
 
-            if model.source_lib == "sklearn":
-                print(" ".join([feature_names[i] + "("+str(counter[i])+")"
-                                for i in selected_words]))
+                if count in print_data:
+                    print_data[count].append(word)
+                else:
+                    print_data[count] = [word]
 
-    def display_model_topics(self, model_id, sample_id, run_number, no_top_words):
+            for count, words in print_data.items():
+                print("In ", count, " runs:", " ".join(words))
+
+    def display_run_topics(self, model_id, sample_id, run_number, no_top_words):
         model = self.models[model_id]
         if model.source_lib == "sklearn":
-            feature_names = model.vectorizer.get_feature_names()
-            for topic_idx, topic in enumerate(self.models[model]["samples"][sample_id][run_number].components_):
+            feature_names = model.word_mapping.get_feature_names()
+            for topic_idx, topic in enumerate(model.samples[sample_id][run_number].components_):
                 print("Topic %d:" % (topic_idx))
                 print(" ".join([feature_names[i]
                                 for i in topic.argsort()[:-no_top_words - 1:-1]]))
         if model.source_lib == "gensim":
-            m = self.models[model]["samples"][sample_id][run_number]
-            m.show_topics(num_words=no_top_words, formatted=False)
+            m = model.samples[sample_id][run_number]
+            print(m.show_topics(num_topics=m.num_topics,
+                                num_words=no_top_words, formatted=False))
 
     def _compute_param_combinations(self, params, n_samples):
         seq = []
