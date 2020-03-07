@@ -61,7 +61,6 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 robustTopics = RobustTopics()
 
 robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=4)
-robustTopics.load_gensim_LdaModel(LsiModel, corpus, dictionary, 5, n_initializations=4)
 robustTopics.load_sklearn_LatentDirichletAllocation(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=4)
 robustTopics.load_sklearn_LatentDirichletAllocation(NMF, tf, tf_vectorizer, 5, n_initializations=4)
 
@@ -69,17 +68,18 @@ robustTopics.fit_models()
 
 # Compare different samples
 # topics.stability_report
-topics.rank_models()
+robustTopics.rank_models()
 
-# Look at topics for a specific model
-topics.analyse_sample("sklearn_nmf", 0, tfidf_feature_names)
+# Look at the topics
+robustTopics.display_sample(0, 0)
+robustTopics.display_model_topics(0, 2, 1, 10)
 
-# Convert the stability report to a pandas dataframe
-pd.DataFrame.from_records(topics.stability_report)
+# Convert the report to a pandas dataframe
+pd.DataFrame.from_records(robustTopics.report)
 
 # Print histograms
 import plotly.express as px
-def show_stability_histograms(self):
+def show_histograms(self):
     for sample in self.rank_models():
         fig = px.histogram(data_frame=ARRAY, x=0, nbins=10, range_x=[
                         0, 1])
@@ -128,6 +128,7 @@ class RobustTopics():
             Returns self.
         """
 
+        print("Fit Models")
         for model in self.models:
             print("")
             print("Model: ", model.topic_model_class)
@@ -182,9 +183,11 @@ class RobustTopics():
 
         self.models.append(topic)
 
+        print(LdaModel_class, " successfully loaded.")
+
         return self
 
-    def load_sklearn_LatentDirichletAllocation(self, LatentDirichletAllocation_class, document_vectors, vectorizer, n_samples, n_initializations=10, setup="simple", custom_params=None):
+    def load_sklearn_model(self, sklearn_model, document_vectors, vectorizer, n_samples, n_initializations=10, setup="simple", custom_params=None):
         parameters = {}
         if setup == "simple":
             parameters = {
@@ -207,11 +210,68 @@ class RobustTopics():
             parameters, n_samples)
 
         topic = TopicModel(
-            "sklearn", LatentDirichletAllocation_class, document_vectors, vectorizer, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
+            "sklearn", sklearn_model, document_vectors, vectorizer, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
 
         self.models.append(topic)
 
+        print(sklearn_model, " successfully loaded.")
+
         return self
+
+    def rank_models(self, weights={
+        "jensenshannon": 1,
+        "jaccard": 1,
+            "kendalltau": 1}):
+        all_reports = []
+
+        for model in self.models:
+            all_reports.extend(model.report)
+
+        return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
+
+    def display_sample(self, model_id, sample_id, occurence_percent=1):
+        model = self.models[model_id]
+        print("Words per topic appearing at least in ",
+              occurence_percent, " of all runs.")
+
+        n_topics = 0
+        feature_names = []
+        if model.source_lib == "sklearn":
+            n_topics = len(model["samples"][sample_id][0].components_)
+            feature_names = model.vectorizer.get_feature_names()
+        if model.source_lib == "gensim":
+            n_topics = model["samples"][sample_id][0].num_topics
+            feature_names = []
+
+        n_runs = len(self.models[model]["samples"][sample_id])
+
+        # Intersect each topic
+        for topic in range(n_topics):
+            word_list = []
+            for terms in self.models[model]["topic_terms"][sample_id]:
+                word_list.extend(terms[topic])
+
+            counter = Counter(word_list)
+            selected_words = filter(lambda x: counter[x] >= n_runs *
+                                    occurence_percent, counter)
+
+            print("Topic - " + str(topic))
+
+            if model.source_lib == "sklearn":
+                print(" ".join([feature_names[i] + "("+str(counter[i])+")"
+                                for i in selected_words]))
+
+    def display_model_topics(self, model_id, sample_id, run_number, no_top_words):
+        model = self.models[model_id]
+        if model.source_lib == "sklearn":
+            feature_names = model.vectorizer.get_feature_names()
+            for topic_idx, topic in enumerate(self.models[model]["samples"][sample_id][run_number].components_):
+                print("Topic %d:" % (topic_idx))
+                print(" ".join([feature_names[i]
+                                for i in topic.argsort()[:-no_top_words - 1:-1]]))
+        if model.source_lib == "gensim":
+            m = self.models[model]["samples"][sample_id][run_number]
+            m.show_topics(num_words=no_top_words, formatted=False)
 
     def _compute_param_combinations(self, params, n_samples):
         seq = []
@@ -246,12 +306,16 @@ class RobustTopics():
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _compute_topic_stability(self):
+        print("Evaluate Models")
         for model in self.models:
+            print("Model: ", model.topic_model_class)
             self._fetch_top_terms(model, 20)
             model_distributions = self._fetch_term_distributions(model)
             ranking_vecs = self._create_ranking_vectors(model)
 
+            print(len(model.samples), " Samples: ", end=" ")
             for sample_id, sample in enumerate(model.samples):
+                print(sample_id, end=" ")
                 n_topics = 0
                 if model.source_lib == "sklearn":
                     n_topics = sample[0].n_components
@@ -334,17 +398,7 @@ class RobustTopics():
 
                 model.report.append(report)
                 model.report_full.append(report_full)
-
-    def rank_models(self, weights={
-        "jensenshannon": 1,
-        "jaccard": 1,
-            "kendalltau": 1}):
-        all_reports = []
-
-        for model in self.models:
-            all_reports.extend(model.report)
-
-        return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
+            print("")
 
     @staticmethod
     def _linear_combination_of_reports(weights, report):
@@ -355,33 +409,6 @@ class RobustTopics():
             combination += report[property]
 
         return combination / total_weight
-
-    def analyse_sample(self, model, sample_id, feature_names, occurence_percent=1):
-        print("Words per topic appearing at least in ",
-              occurence_percent, " of all runs.")
-
-        n_topics = len(self.models[model]["samples"][sample_id][0].components_)
-        n_runs = len(self.models[model]["samples"][sample_id])
-
-        # Intersect each topic
-        for topic in range(n_topics):
-            word_list = []
-            for terms in self.models[model]["topic_terms"][sample_id]:
-                word_list.extend(terms[topic])
-
-            counter = Counter(word_list)
-            selected_words = filter(lambda x: counter[x] >= n_runs *
-                                    occurence_percent, counter)
-
-            print("Topic - " + str(topic))
-            print(" ".join([feature_names[i] + "("+str(counter[i])+")"
-                            for i in selected_words]))
-
-    def display_topics(self, model, sample_id, model_number, feature_names, no_top_words):
-        for topic_idx, topic in enumerate(self.models[model]["samples"][sample_id][model_number].components_):
-            print("Topic %d:" % (topic_idx))
-            print(" ".join([feature_names[i]
-                            for i in topic.argsort()[:-no_top_words - 1:-1]]))
 
     def _fetch_top_terms(self, model, n_top_terms):
         model_terms = []
@@ -468,16 +495,6 @@ class RobustTopics():
         # Added rounding because without often inf was the result
         # Usage of base 2 algorithm so that the range is [0, 1]
         distance = jensenshannon(a.round(12), b.round(12), base=2)
-        return 1 - distance
-
-    @staticmethod
-    def _wasserstein_similarity(a, b):
-        distance = wasserstein_distance(a, b)
-        return 1 - distance
-
-    @staticmethod
-    def _energy_similarity(a, b):
-        distance = energy_distance(a, b)
         return 1 - distance
 
     @staticmethod
