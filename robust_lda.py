@@ -5,6 +5,7 @@
 # License: MIT
 
 import math
+from itertools import combinations
 from collections import Counter
 
 import numpy as np
@@ -28,6 +29,9 @@ from sklearn.decomposition import LatentDirichletAllocation, NMF
 from gensim.models import LdaModel, LsiModel
 from gensim.utils import simple_preprocess
 from gensim import corpora
+import spacy
+
+nlp = spacy.load("en")
 
 dataset = fetch_20newsgroups(
     shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
@@ -58,11 +62,11 @@ dictionary = corpora.Dictionary(tokenized_data)
 corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 
 # TOPIC MODELLING
-robustTopics = RobustTopics()
+robustTopics = RobustTopics(nlp, 5)
 
-robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=6)
-robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
-robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=6)
+# robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=6)
+# robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
+robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 2, n_initializations=3)
 
 robustTopics.fit_models()
 
@@ -108,8 +112,9 @@ class RobustTopics():
     sklearn.decomposition.NMF : NMF implementation.
     """
 
-    def __init__(self, n_relevant_top_words=20):
+    def __init__(self, spacy_nlp, n_relevant_top_words=20):
         self.n_relevant_top_words = n_relevant_top_words
+        self.nlp = spacy_nlp
 
         self.models = []
 
@@ -316,6 +321,45 @@ class RobustTopics():
     def _list_to_value(p_values, sampling, p_type):
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
+    def _topic_matching(self, n_topics, model, sample_id, terms, term_distributions, ranking_vecs):
+        print("")
+        print("Topic Matching")
+        run_coherences = []
+
+        for run_number in range(model.n_initializations):
+            topic_terms = []
+            if model.source_lib == "sklearn":
+                feature_names = model.word_mapping.get_feature_names()
+                for topic in model.samples[sample_id][run_number].components_:
+                    topic_terms.append([feature_names[i]
+                                        for i in topic.argsort()[:-self.n_relevant_top_words - 1:-1]])
+            if model.source_lib == "gensim":
+                m = model.samples[sample_id][run_number]
+                print(" ".join([i[0] for i in m.show_topics(
+                    num_topics=m.num_topics, num_words=self.n_relevant_top_words, formatted=False)]))
+
+            run_coherences.append(self.compute_tcw2c(n_topics, topic_terms))
+
+        best_run = run_coherences.index(max(run_coherences))
+
+        for topic in range(n_topics):
+            pass
+
+    # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
+    def compute_tcw2c(self, n_topics, topic_terms):
+        print(topic_terms)
+        total_coherence = []
+        for topic in range(n_topics):
+            pairs = []
+            for pair in combinations(topic_terms[topic], 2):
+                tokens = self.nlp(" ".join(pair))
+                if tokens[0].has_vector and tokens[1].has_vector:
+                    pairs.append(tokens[0].similarity(tokens[1]))
+                else:
+                    print("One of", tokens, "has no vector.")
+            total_coherence.append(sum(pairs) / len(pairs))
+        return sum(total_coherence) / n_topics
+
     def _compute_topic_stability(self):
         print("Evaluate Models")
         for model in self.models:
@@ -343,6 +387,9 @@ class RobustTopics():
 
                 report = {}
                 report_full = {}
+
+                self._topic_matching(
+                    n_topics, model, sample_id, terms, term_distributions, ranking_vecs)
 
                 # Evaluate each topic
                 for topic in range(n_topics):
