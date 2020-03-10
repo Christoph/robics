@@ -345,9 +345,10 @@ class RobustTopics():
         for topic in range(n_topics):
             pass
 
+        return np.array(run_coherences)
+
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms):
-        print(topic_terms)
         total_coherence = []
         for topic in range(n_topics):
             pairs = []
@@ -388,7 +389,7 @@ class RobustTopics():
                 report = {}
                 report_full = {}
 
-                self._topic_matching(
+                run_coherence = self._topic_matching(
                     n_topics, model, sample_id, terms, term_distributions, ranking_vecs)
 
                 # Evaluate each topic
@@ -419,6 +420,8 @@ class RobustTopics():
                 report["n_topics"] = n_topics
                 report["params"] = model.sampling_parameters[sample_id]
 
+                report["topic_coherence"] = run_coherence.mean()
+
                 report["jaccard"] = jaccard_similarity.mean()
                 report["kendalltau"] = kendalls_ranking.mean()
                 report["spearman"] = spearman_ranking.mean()
@@ -429,6 +432,12 @@ class RobustTopics():
                 report_full["n_topics"] = n_topics
                 report_full["params"] = model.sampling_parameters[sample_id]
 
+                report_full["topic_coherence"] = {
+                    "mean": run_coherence.mean(),
+                    "std": run_coherence.std(),
+                    "min": run_coherence.min(),
+                    "max": run_coherence.max(),
+                }
                 report_full["jaccard"] = {
                     "mean": jaccard_similarity.mean(axis=1),
                     "std": jaccard_similarity.std(axis=1),
