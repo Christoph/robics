@@ -433,10 +433,7 @@ class RobustTopics():
                 report_full["params"] = model.sampling_parameters[sample_id]
 
                 report_full["topic_coherence"] = {
-                    "mean": run_coherence.mean(),
-                    "std": run_coherence.std(),
-                    "min": run_coherence.min(),
-                    "max": run_coherence.max(),
+                    "topic_coherences": run_coherence,
                 }
                 report_full["jaccard"] = {
                     "mean": jaccard_similarity.mean(axis=1),
