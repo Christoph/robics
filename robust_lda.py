@@ -355,7 +355,7 @@ class RobustTopics():
 
             # Map reference topics to run topics based on highest similarity
             for topic in range(n_topics):
-                # [0] is the reference topic index and [1] is the other index
+                # [1] is the reference topic index and [0] is the other index
                 first_highest_index = np.argwhere(sim == sim.max())[0]
                 run_mapping[first_highest_index[0]] = first_highest_index[1]
 
@@ -363,10 +363,11 @@ class RobustTopics():
                 sim[:, first_highest_index[1]] = -1
                 sim[first_highest_index[0], :] = -1
 
-            print(run_mapping)
-            topic_mapping.append(run_mapping)
+            sort_indices = np.sort(list(run_mapping.items()))[:, 1]
 
-        return np.array(run_coherences)
+            topic_mapping.append(sort_indices)
+
+        return np.array(run_coherences), topic_mapping
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms):
@@ -410,7 +411,7 @@ class RobustTopics():
                 report = {}
                 report_full = {}
 
-                run_coherence = self._topic_matching(
+                run_coherence, topic_mapping = self._topic_matching(
                     n_topics, model, sample_id, terms, term_distributions, ranking_vecs)
 
                 # Evaluate each topic
