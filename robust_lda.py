@@ -9,8 +9,7 @@ from itertools import combinations
 from collections import Counter
 
 import numpy as np
-from scipy.spatial.distance import pdist
-from scipy.spatial.distance import jensenshannon
+from scipy.spatial.distance import pdist, squareform, jensenshannon
 from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_distance
 import sobol_seq
 
@@ -21,7 +20,7 @@ Sources who show how to use Topic models
 https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
 
 
-EXAMPLE CODE
+# EXAMPLE CODE
 
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -65,8 +64,8 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 robustTopics = RobustTopics(nlp, 5)
 
 # robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=6)
-# robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
-robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 2, n_initializations=3)
+robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
+# robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=3)
 
 robustTopics.fit_models()
 
@@ -342,8 +341,30 @@ class RobustTopics():
 
         best_run = run_coherences.index(max(run_coherences))
 
-        for topic in range(n_topics):
-            pass
+        topic_mapping = []
+        reference_topic = terms[best_run]
+
+        # Create mapping for all topics across all runs
+        for run in range(model.n_initializations):
+            topics = np.concatenate((reference_topic, terms[
+                run, :, :]), axis=0)
+            sim = squareform(pdist(topics, self._jaccard_similarity))[
+                :n_topics, n_topics:]
+
+            run_mapping = {}
+
+            # Map reference topics to run topics based on highest similarity
+            for topic in range(n_topics):
+                # [0] is the reference topic index and [1] is the other index
+                first_highest_index = np.argwhere(sim == sim.max())[0]
+                run_mapping[first_highest_index[0]] = first_highest_index[1]
+
+                # Delete reference topic with highest value in it
+                sim[:, first_highest_index[1]] = -1
+                sim[first_highest_index[0], :] = -1
+
+            print(run_mapping)
+            topic_mapping.append(run_mapping)
 
         return np.array(run_coherences)
 
