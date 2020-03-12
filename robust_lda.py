@@ -351,19 +351,21 @@ class RobustTopics():
             sim = squareform(pdist(topics, self._jaccard_similarity))[
                 :n_topics, n_topics:]
 
-            run_mapping = {}
+            run_mapping = []
 
             # Map reference topics to run topics based on highest similarity
             for topic in range(n_topics):
                 # [1] is the reference topic index and [0] is the other index
                 first_highest_index = np.argwhere(sim == sim.max())[0]
-                run_mapping[first_highest_index[0]] = first_highest_index[1]
+                run_mapping.append(
+                    [first_highest_index[1], first_highest_index[0]])
 
-                # Delete reference topic with highest value in it
+                # Delete topic with highest value
                 sim[:, first_highest_index[1]] = -1
                 sim[first_highest_index[0], :] = -1
 
-            sort_indices = np.sort(list(run_mapping.items()))[:, 1]
+            run_mapping.sort()
+            sort_indices = np.array(run_mapping)[:, 1]
 
             topic_mapping.append(sort_indices)
 
