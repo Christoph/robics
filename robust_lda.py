@@ -277,16 +277,10 @@ class RobustTopics():
 
     def display_run_topics(self, model_id, sample_id, run_number, no_top_words):
         model = self.models[model_id]
-        if model.source_lib == "sklearn":
-            feature_names = model.word_mapping.get_feature_names()
-            for topic_idx, topic in enumerate(model.samples[sample_id][run_number].components_):
-                print("Topic %d:" % (topic_idx))
-                print(" ".join([feature_names[i]
-                                for i in topic.argsort()[:-no_top_words - 1:-1]]))
-        if model.source_lib == "gensim":
-            m = model.samples[sample_id][run_number]
-            print(m.show_topics(num_topics=m.num_topics,
-                                num_words=no_top_words, formatted=False))
+
+        for topic_idx, topic in enumerate(model.topic_terms[sample_id][run_number]):
+            print("Topic %d:" % (topic_idx))
+            print(" ".join(topic))
 
     def _compute_param_combinations(self, params, n_samples):
         seq = []
@@ -321,31 +315,34 @@ class RobustTopics():
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _topic_matching(self, n_topics, model, sample_id, terms, term_distributions, ranking_vecs):
-        print("")
-        print("Topic Matching")
+        print("Topic Matching for each Initialization")
         run_coherences = []
 
+        print("Compute Topic Coherence:", end="")
         for run_number in range(model.n_initializations):
-            topic_terms = []
-            if model.source_lib == "sklearn":
-                feature_names = model.word_mapping.get_feature_names()
-                for topic in model.samples[sample_id][run_number].components_:
-                    topic_terms.append([feature_names[i]
-                                        for i in topic.argsort()[:-self.n_relevant_top_words - 1:-1]])
-            if model.source_lib == "gensim":
-                m = model.samples[sample_id][run_number]
-                print(" ".join([i[0] for i in m.show_topics(
-                    num_topics=m.num_topics, num_words=self.n_relevant_top_words, formatted=False)]))
+            print(model.n_initializations-run_number, end="")
+            topic_terms = model.topic_terms[sample_id][run_number]
+
+            # if model.source_lib == "sklearn":
+            #     feature_names = model.word_mapping.get_feature_names()
+            #     for topic in model.samples[sample_id][run_number].components_:
+            #         topic_terms.append([feature_names[i]
+            #                             for i in topic.argsort()[:-self.n_relevant_top_words - 1:-1]])
+            # if model.source_lib == "gensim":
+            #     m = model.samples[sample_id][run_number]
+            #     print(" ".join([i[0] for i in m.show_topics(
+            #         num_topics=m.num_topics, num_words=self.n_relevant_top_words, formatted=False)]))
 
             run_coherences.append(self.compute_tcw2c(n_topics, topic_terms))
 
         best_run = run_coherences.index(max(run_coherences))
-
-        topic_mapping = []
         reference_topic = terms[best_run]
 
+        print("")
+        print("Match Topics:", end="")
         # Create mapping for all topics across all runs
         for run in range(model.n_initializations):
+            print(model.n_initializations-run, end="")
             topics = np.concatenate((reference_topic, terms[
                 run, :, :]), axis=0)
             sim = squareform(pdist(topics, self._jaccard_similarity))[
@@ -367,9 +364,13 @@ class RobustTopics():
             run_mapping.sort()
             sort_indices = np.array(run_mapping)[:, 1]
 
-            topic_mapping.append(sort_indices)
+            # Sort all runs
+            terms[run] = terms[run, sort_indices]
+            term_distributions[run] = term_distributions[run, sort_indices]
+            ranking_vecs[run] = ranking_vecs[run, sort_indices]
 
-        return np.array(run_coherences), topic_mapping
+        print("")
+        return np.array(run_coherences)
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms):
@@ -391,11 +392,11 @@ class RobustTopics():
             print("Model: ", model.topic_model_class)
             self._fetch_top_terms(model, 20)
             model_distributions = self._fetch_term_distributions(model)
-            ranking_vecs = self._create_ranking_vectors(model)
+            all_ranking_vecs = self._create_ranking_vectors(model)
 
-            print(len(model.samples), " Samples: ", end=" ")
             for sample_id, sample in enumerate(model.samples):
-                print(sample_id, end=" ")
+                print("Sample", sample_id+1, "of",
+                      len(model.samples), " Samples")
                 n_topics = 0
                 if model.source_lib == "sklearn":
                     n_topics = sample[0].n_components
@@ -404,6 +405,7 @@ class RobustTopics():
 
                 terms = model.topic_terms[sample_id]
                 term_distributions = model_distributions[sample_id]
+                ranking_vecs = all_ranking_vecs[sample_id]
 
                 kendalls = []
                 spearman = []
@@ -413,7 +415,7 @@ class RobustTopics():
                 report = {}
                 report_full = {}
 
-                run_coherence, topic_mapping = self._topic_matching(
+                run_coherence = self._topic_matching(
                     n_topics, model, sample_id, terms, term_distributions, ranking_vecs)
 
                 # Evaluate each topic
@@ -426,11 +428,11 @@ class RobustTopics():
                         :, topic, :], self._jenson_similarity)
                     jensen.append(jen)
 
-                    ken = pdist(ranking_vecs[sample_id][
+                    ken = pdist(ranking_vecs[
                         :, topic, :], self._kendalls)
                     kendalls.append(ken)
 
-                    spear = pdist(ranking_vecs[sample_id][
+                    spear = pdist(ranking_vecs[
                         :, topic, :], self._spear)
                     spearman.append(spear)
 
@@ -505,14 +507,15 @@ class RobustTopics():
             for instance in sample:
                 if model.source_lib == "sklearn":
                     top_terms = self._get_top_terms(
-                        instance, n_top_terms)
+                        model, instance, n_top_terms)
                     terms.append(top_terms)
                 if model.source_lib == "gensim":
                     top_terms = []
                     for topic_id in range(instance.num_topics):
                         top_terms.append([x[0] for x in instance.get_topic_terms(
                             topic_id, n_top_terms)])
-                    terms.append(top_terms)
+                    print(top_terms)
+                    terms.append([model.word_mapping[t] for t in top_terms])
             model_terms.append(np.array(terms))
         model.topic_terms = model_terms
 
@@ -538,8 +541,8 @@ class RobustTopics():
             terms = []
             for instance in sample:
                 if model.source_lib == "sklearn":
-                    top_terms = self._get_top_terms(
-                        instance, self.n_relevant_top_words)
+                    top_terms = self._get_top_terms(model,
+                                                    instance, self.n_relevant_top_words)
                     terms.append(top_terms)
                     vocab.update([e for l in top_terms for e in l])
                 if model.source_lib == "gensim":
@@ -596,10 +599,12 @@ class RobustTopics():
         return vec
 
     @staticmethod
-    def _get_top_terms(model, n_terms):
+    def _get_top_terms(model, instance, n_terms):
+        feature_names = model.word_mapping.get_feature_names()
         topic_terms = []
-        for topic in model.components_:
-            topic_terms.append([i for i in topic.argsort()[:-n_terms - 1:-1]])
+        for topic in instance.components_:
+            topic_terms.append([feature_names[i]
+                                for i in topic.argsort()[:-n_terms - 1:-1]])
 
         return topic_terms
 
