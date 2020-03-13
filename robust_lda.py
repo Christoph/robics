@@ -10,7 +10,7 @@ from collections import Counter
 
 import numpy as np
 from scipy.spatial.distance import pdist, squareform, jensenshannon
-from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_distance
+from scipy.stats import kendalltau,
 import sobol_seq
 
 import time
@@ -378,8 +378,8 @@ class RobustTopics():
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms, max_terms=5):
-        # max_terms=20 results in roughly 20s per topic
-        # max_terms=10 results in roughly 3s per topic
+        # max_terms=20 results in roughly 15 times the time
+        # max_terms=10 results in roughly 4 times the time
         # max_terms=5 results in roughly 0.75s per topic
 
         total_coherence = []
@@ -420,7 +420,6 @@ class RobustTopics():
                 ranking_vecs = all_ranking_vecs[sample_id]
 
                 kendalls = []
-                spearman = []
                 jensen = []
                 jaccard = []
 
@@ -444,12 +443,7 @@ class RobustTopics():
                         :, topic, :], self._kendalls)
                     kendalls.append(ken)
 
-                    spear = pdist(ranking_vecs[
-                        :, topic, :], self._spear)
-                    spearman.append(spear)
-
                 kendalls_ranking = np.array(kendalls)
-                spearman_ranking = np.array(spearman)
                 jaccard_similarity = np.array(jaccard)
                 jensen_similarity = np.array(jensen)
 
@@ -462,7 +456,6 @@ class RobustTopics():
 
                 report["jaccard"] = jaccard_similarity.mean()
                 report["kendalltau"] = kendalls_ranking.mean()
-                report["spearman"] = spearman_ranking.mean()
                 report["jensenshannon"] = jensen_similarity.mean()
 
                 report_full["model"] = model.topic_model_class
@@ -484,12 +477,6 @@ class RobustTopics():
                     "std": kendalls_ranking.std(axis=1),
                     "min": kendalls_ranking.min(axis=1),
                     "max": kendalls_ranking.max(axis=1),
-                }
-                report_full["spearman"] = {
-                    "mean": spearman_ranking.mean(axis=1),
-                    "std": spearman_ranking.std(axis=1),
-                    "min": spearman_ranking.min(axis=1),
-                    "max": spearman_ranking.max(axis=1),
                 }
                 report_full["jensenshannon"] = {
                     "mean": jensen_similarity.mean(axis=1),
@@ -586,11 +573,6 @@ class RobustTopics():
     @staticmethod
     def _kendalls(a, b):
         k, _ = kendalltau(a, b)
-        return k
-
-    @staticmethod
-    def _spear(a, b):
-        k, _ = spearmanr(a, b)
         return k
 
     @staticmethod
