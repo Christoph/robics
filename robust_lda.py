@@ -27,7 +27,7 @@ https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation, NMF
-from gensim.models import LdaModel, LsiModel
+from gensim.models import LdaModel, nmf, ldamulticore
 from gensim.utils import simple_preprocess
 from gensim import corpora
 import spacy
@@ -65,9 +65,10 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 # TOPIC MODELLING
 robustTopics = RobustTopics(nlp, 5)
 
-# robustTopics.load_gensim_LdaModel(LdaModel, corpus, dictionary, 5, n_initializations=6)
+robustTopics.load_gensim_model(ldamulticore.LdaModel, corpus, dictionary, 5, n_initializations=6)
+robustTopics.load_gensim_model(nmf.Nmf, corpus, dictionary, 5, n_initializations=6)
 robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
-# robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=3)
+robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=3)
 
 robustTopics.fit_models()
 
@@ -161,7 +162,7 @@ class RobustTopics():
 
         return self
 
-    def load_gensim_LdaModel(self, LdaModel_class, corpus, dictionary, n_samples, n_initializations=10, setup="simple", custom_params=None):
+    def load_gensim_model(self, gensim_model, corpus, dictionary, n_samples, n_initializations=10, setup="simple", custom_params=None):
         parameters = {}
         if setup == "simple":
             parameters = {
@@ -184,11 +185,11 @@ class RobustTopics():
             parameters, n_samples)
 
         topic = TopicModel(
-            "gensim", LdaModel_class, corpus, dictionary, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
+            "gensim", gensim_model, corpus, dictionary, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
 
         self.models.append(topic)
 
-        print(LdaModel_class, " successfully loaded.")
+        print(gensim_model, " successfully loaded.")
 
         return self
 
@@ -239,19 +240,16 @@ class RobustTopics():
 
     def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
         model = self.models[model_id]
+        n_runs = len(model.samples[sample_id])
+
         print("Words per topic appearing at least in ",
-              round(occurence_percent*100), "% of all runs.")
+              round(occurence_percent*100), "% of all runs(", n_runs, ").")
 
         n_topics = 0
-        feature_names = []
         if model.source_lib == "sklearn":
             n_topics = len(model.samples[sample_id][0].components_)
-            feature_names = model.word_mapping.get_feature_names()
         if model.source_lib == "gensim":
             n_topics = model.samples[sample_id][0].num_topics
-            feature_names = model.word_mapping.id2token
-
-        n_runs = len(model.samples[sample_id])
 
         # Intersect each topic
         for topic in range(n_topics):
@@ -263,12 +261,10 @@ class RobustTopics():
             selected_words = filter(lambda x: counter[x] >= n_runs *
                                     occurence_percent, counter)
 
-            print("Topic - " + str(topic))
+            print("Topic " + str(topic))
             print_data = {}
-            for i in selected_words:
-                count = counter[i]
-                # word = feature_names[i]
-                word = i
+            for word in selected_words:
+                count = counter[word]
 
                 if count in print_data:
                     print_data[count].append(word)
@@ -276,7 +272,7 @@ class RobustTopics():
                     print_data[count] = [word]
 
             for count, words in print_data.items():
-                print("In ", count, " runs:", " ".join(words))
+                print("In", count, "runs:", " ".join(words))
 
     def display_run_topics(self, model_id, sample_id, run_number, no_top_words):
         model = self.models[model_id]
@@ -326,19 +322,8 @@ class RobustTopics():
             print(model.n_initializations-run_number, end="")
             topic_terms = model.topic_terms[sample_id][run_number]
 
-            # if model.source_lib == "sklearn":
-            #     feature_names = model.word_mapping.get_feature_names()
-            #     for topic in model.samples[sample_id][run_number].components_:
-            #         topic_terms.append([feature_names[i]
-            #                             for i in topic.argsort()[:-self.n_relevant_top_words - 1:-1]])
-            # if model.source_lib == "gensim":
-            #     m = model.samples[sample_id][run_number]
-            #     print(" ".join([i[0] for i in m.show_topics(
-            #         num_topics=m.num_topics, num_words=self.n_relevant_top_words, formatted=False)]))
-
             run_coherences.append(self.compute_tcw2c(n_topics, topic_terms))
 
-        print(run_coherences)
         best_run = run_coherences.index(max(run_coherences))
         reference_topic = terms[best_run]
 
@@ -400,7 +385,7 @@ class RobustTopics():
 
     def _compute_topic_stability(self):
         print("Evaluate Models")
-        for model in self.models:
+        for model_id, model in enumerate(self.models):
             print("Model: ", model.topic_model_class)
             self._fetch_top_terms(model, 20)
             model_distributions = self._fetch_term_distributions(model)
@@ -448,6 +433,7 @@ class RobustTopics():
                 jensen_similarity = np.array(jensen)
 
                 report["model"] = model.topic_model_class
+                report["model_id"] = model_id
                 report["sample_id"] = sample_id
                 report["n_topics"] = n_topics
                 report["params"] = model.sampling_parameters[sample_id]
@@ -459,6 +445,7 @@ class RobustTopics():
                 report["jensenshannon"] = jensen_similarity.mean()
 
                 report_full["model"] = model.topic_model_class
+                report_full["model_id"] = model_id
                 report_full["sample_id"] = sample_id
                 report_full["n_topics"] = n_topics
                 report_full["params"] = model.sampling_parameters[sample_id]
@@ -511,10 +498,9 @@ class RobustTopics():
                 if model.source_lib == "gensim":
                     top_terms = []
                     for topic_id in range(instance.num_topics):
-                        top_terms.append([x[0] for x in instance.get_topic_terms(
+                        top_terms.append([model.word_mapping[x[0]] for x in instance.get_topic_terms(
                             topic_id, n_top_terms)])
-                    print(top_terms)
-                    terms.append([model.word_mapping[t] for t in top_terms])
+                    terms.append(top_terms)
             model_terms.append(np.array(terms))
         model.topic_terms = model_terms
 
