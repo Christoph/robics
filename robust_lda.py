@@ -10,7 +10,7 @@ from collections import Counter
 
 import numpy as np
 from scipy.spatial.distance import pdist, squareform, jensenshannon
-from scipy.stats import kendalltau,
+from scipy.stats import kendalltau
 import sobol_seq
 
 import time
