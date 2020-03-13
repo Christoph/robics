@@ -13,6 +13,8 @@ from scipy.spatial.distance import pdist, squareform, jensenshannon
 from scipy.stats import kendalltau, spearmanr, wasserstein_distance, energy_distance
 import sobol_seq
 
+import time
+
 
 """
 Sources who show how to use Topic models
@@ -232,8 +234,8 @@ class RobustTopics():
 
         return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
 
-    def display_model_topics(self):
-        pass
+    # def display_model_topics(self):
+    #     pass
 
     def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
         model = self.models[model_id]
@@ -265,7 +267,8 @@ class RobustTopics():
             print_data = {}
             for i in selected_words:
                 count = counter[i]
-                word = feature_names[i]
+                # word = feature_names[i]
+                word = i
 
                 if count in print_data:
                     print_data[count].append(word)
@@ -335,6 +338,7 @@ class RobustTopics():
 
             run_coherences.append(self.compute_tcw2c(n_topics, topic_terms))
 
+        print(run_coherences)
         best_run = run_coherences.index(max(run_coherences))
         reference_topic = terms[best_run]
 
@@ -373,16 +377,24 @@ class RobustTopics():
         return np.array(run_coherences)
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
-    def compute_tcw2c(self, n_topics, topic_terms):
+    def compute_tcw2c(self, n_topics, topic_terms, max_terms=5):
+        # max_terms=20 results in roughly 20s per topic
+        # max_terms=10 results in roughly 3s per topic
+        # max_terms=5 results in roughly 0.75s per topic
+
         total_coherence = []
         for topic in range(n_topics):
             pairs = []
-            for pair in combinations(topic_terms[topic], 2):
-                tokens = self.nlp(" ".join(pair))
+            processed_topic_terms = (self.nlp(str(t))
+                                     for t in topic_terms[topic][:max_terms])
+
+            for pair in combinations(processed_topic_terms, 2):
+                tokens = pair
                 if tokens[0].has_vector and tokens[1].has_vector:
                     pairs.append(tokens[0].similarity(tokens[1]))
                 else:
                     print("One of", tokens, "has no vector.")
+
             total_coherence.append(sum(pairs) / len(pairs))
         return sum(total_coherence) / n_topics
 
