@@ -1,26 +1,29 @@
-"""The :mod:`sklearn.robust_lda` module implements a parameter selection based on stability of multiple runs.
-"""
 # Author: Christoph Kralj <christoph.kralj@gmail.com>
 #
 # License: MIT
 
-import math
-from itertools import combinations
-from collections import Counter
+"""Computes topic stability for different topic model parametrization based on the topic terms.
 
-import numpy as np
-from scipy.spatial.distance import pdist, squareform, jensenshannon
-from scipy.stats import kendalltau
-import sobol_seq
+This model allows the fitting and anaylsis of multiple topic models in a very
+easy to use form targeted at anybody who needs topic models but is no expert in
+machine learning.
+
+The algorithm:
+#.  Computes samples based on the sobol sequence algorithm.
+    This is better than grid search because it requires far less samples.
+    And better as random search as it makes sure that all places in the
+    parameter space are used.
+#.  Parametrization is re-initilialized multiple times.
+#.  A topic matching algorithm matches the topics across the initializations
+    based on the instance with the highest coherence score.
+#.  The robustness of the parametrization is calculated based on the top-terms
+    of each topic and the topic distributions accross all initalizations.
 
 
-"""
-Sources who show how to use Topic models
+Usage example
+--------------
 
-https://medium.com/mlreview/topic-modeling-with-scikit-learn-e80d33668730
-
-
-# EXAMPLE CODE
+This is a full usage example including preprocessing.
 
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -32,11 +35,13 @@ import spacy
 
 nlp = spacy.load("en")
 
+# PREPROCESSING
+
 dataset = fetch_20newsgroups(
     shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
 documents = dataset.data[:100]
 
-# SKLEARN
+# sklearn
 no_features = 1000
 
 # NMF is able to use tf-idf
@@ -51,7 +56,7 @@ tf_vectorizer = CountVectorizer(
 tf = tf_vectorizer.fit_transform(documents)
 tf_feature_names = tf_vectorizer.get_feature_names()
 
-# GENSIM
+# gensim
 def docs_to_words(docs):
     for doc in docs:
         yield(simple_preprocess(str(doc), deacc=True))
@@ -61,17 +66,19 @@ dictionary = corpora.Dictionary(tokenized_data)
 corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 
 # TOPIC MODELLING
-robustTopics = RobustTopics(nlp, 5)
+robustTopics = RobustTopics(nlp)
 
 robustTopics.load_gensim_model(
-    ldamulticore.LdaModel, corpus, dictionary, 5, n_initializations=6)
+    ldamulticore.LdaModel, corpus, dictionary, n_samples=5, n_initializations=6)
 robustTopics.load_gensim_model(
-    nmf.Nmf, corpus, dictionary, 5, n_initializations=6)
+    nmf.Nmf, corpus, dictionary, n_samples=5, n_initializations=6)
 robustTopics.load_sklearn_model(
-    LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
-robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=3)
+    LatentDirichletAllocation, tf, tf_vectorizer, n_samples=5, n_initializations=6)
+robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, n_samples=5, n_initializations=3)
 
 robustTopics.fit_models()
+
+# ANALYSIS
 
 # Compare different samples
 robustTopics.rank_models()
@@ -80,18 +87,22 @@ robustTopics.rank_models()
 robustTopics.display_sample_topics(1, 0, 0.5)
 robustTopics.display_run_topics(0, 0, 0, 10)
 
-# Convert the report to a pandas dataframe
-pd.DataFrame.from_records(robustTopics.report)
+# Look at the full reports inclusing separate values for each initialization
+robustTopics.models[model_id].report_full
 
-# Print histograms
-import plotly.express as px
-def show_histograms(self):
-    for sample in self.rank_models():
-        fig = px.histogram(data_frame=ARRAY, x=0, nbins=10, range_x=[
-                        0, 1])
-        fig.show()
+# Convert the reports to a pandas dataframe
+pd.DataFrame.from_records(robustTopics.models[model_id].report)
 
 """
+
+import math
+from itertools import combinations
+from collections import Counter
+
+import numpy as np
+from scipy.spatial.distance import pdist, squareform, jensenshannon
+from scipy.stats import kendalltau
+import sobol_seq
 
 
 class RobustTopics():
