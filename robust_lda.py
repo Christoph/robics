@@ -13,8 +13,6 @@ from scipy.spatial.distance import pdist, squareform, jensenshannon
 from scipy.stats import kendalltau
 import sobol_seq
 
-import time
-
 
 """
 Sources who show how to use Topic models
