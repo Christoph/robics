@@ -430,6 +430,21 @@ class RobustTopics():
             print(" ".join(topic))
 
     def _compute_param_combinations(self, params, n_samples):
+        """Computes the sample parametrizations based on a sobol sequence.
+
+        Parameters
+        ----------
+        params : object
+            The params object with the parameters and ranges.
+        n_sample : int
+            The number of samples taken from the parameter space.
+
+        Returns
+        ----------
+        list
+            List of n_samples parameter combinations.
+        """
+
         seq = []
         changing_params = list(
             filter(lambda x: params[x]["mode"] is not "fixed", params))
@@ -447,6 +462,8 @@ class RobustTopics():
         return seq
 
     def _param_to_value(self, param, sampling):
+        """Map the sampling values to parameter values."""
+
         if param["mode"] == "range":
             return self._range_to_value(param["values"], sampling, param["type"])
         if param["mode"] == "list":
@@ -462,6 +479,7 @@ class RobustTopics():
         return p_values[min(math.floor(sampling*len(p_values)), len(p_values)-1)]
 
     def _topic_matching(self, n_topics, model, sample_id, terms, term_distributions, ranking_vecs):
+        """Compute the coherence scores for each topic."""
         print("Topic Matching for each Initialization")
         run_coherences = []
 
@@ -511,9 +529,14 @@ class RobustTopics():
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms, max_terms=5):
-        # max_terms=20 results in roughly 15 times the time
-        # max_terms=10 results in roughly 4 times the time
+        """Compute coherence score based on wordvector similarities.
+
+        Performance is a huge issue in this method. Be careful!
+        Example:
         # max_terms=5 results in roughly 0.75s per topic
+        # max_terms=10 results in roughly 4 times the time
+        # max_terms=20 results in roughly 15 times the time
+        """
 
         total_coherence = []
         for topic in range(n_topics):
@@ -532,6 +555,7 @@ class RobustTopics():
         return sum(total_coherence) / n_topics
 
     def _compute_topic_stability(self):
+        """Computes the stability for each model."""
         print("Evaluate Models")
         for model_id, model in enumerate(self.models):
             print("Model: ", model.topic_model_class)
@@ -626,6 +650,7 @@ class RobustTopics():
 
     @staticmethod
     def _linear_combination_of_reports(weights, report):
+        """Compute the linear combination for ranking."""
         total_weight = 0
         combination = 0
         for property, weight in weights.items():
@@ -635,6 +660,7 @@ class RobustTopics():
         return combination / total_weight
 
     def _fetch_top_terms(self, model, n_top_terms):
+        """Get the top n terms for each topic of the selected model."""
         model_terms = []
         for sample in model.samples:
             terms = []
@@ -653,6 +679,7 @@ class RobustTopics():
         model.topic_terms = model_terms
 
     def _fetch_term_distributions(self, model):
+        """Get the topic distributions for all topics of the selected model."""
         model_distributions = []
         for sample in model.samples:
             term_distributions = []
@@ -666,6 +693,7 @@ class RobustTopics():
         return model_distributions
 
     def _create_ranking_vectors(self, model):
+        """Create the ranking vectors based on the top terms."""
         vocab = set()
         sample_terms = []
         ranking_vecs = []
@@ -700,17 +728,20 @@ class RobustTopics():
 
     @staticmethod
     def _jaccard_similarity(a, b):
+        """Compute the jaccard similarity between two lists."""
         sa = set(a)
         sb = set(b)
         return len(sa.intersection(sb))/len(sa.union(sb))
 
     @staticmethod
     def _kendalls(a, b):
+        """Compute the rank correlation based on kedalls tau."""
         k, _ = kendalltau(a, b)
         return k
 
     @staticmethod
     def _jenson_similarity(a, b):
+        """Compute the correlation between two distributions."""
         # Added rounding because without often inf was the result
         # Usage of base 2 algorithm so that the range is [0, 1]
         distance = jensenshannon(a.round(12), b.round(12), base=2)
@@ -718,6 +749,7 @@ class RobustTopics():
 
     @staticmethod
     def _terms_to_ranking(terms, vocab):
+        """Convertthe vocab set to the ranking base vector."""
         vec = []
         for e in vocab:
             if e in terms:
@@ -728,6 +760,7 @@ class RobustTopics():
 
     @staticmethod
     def _get_top_terms(model, instance, n_terms):
+        """Get top n terms for sklearn models."""
         feature_names = model.word_mapping.get_feature_names()
         topic_terms = []
         for topic in instance.components_:
@@ -738,6 +771,8 @@ class RobustTopics():
 
 
 class TopicModel():
+    """A helper class for the robustTopics class."""
+
     def __init__(self, source_lib, topic_model_class, data, word_mapping, parameters, sampling_parameters, n_samples, n_initializations, samples, topic_terms, report, report_full) -> None:
         self.source_lib = source_lib
         self.topic_model_class = topic_model_class
