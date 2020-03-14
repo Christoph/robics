@@ -279,8 +279,8 @@ class RobustTopics():
             "custom"
             Use your own parameters for the sampling algorithm.
         custom_params : object
-            Only used when "custom" is set for setup. The format is a dictionary
-            with the folloing content
+            Only used when "custom" is set for setup. Use the following format
+            for the parameters:
             {
                 parameter_name : {
                     "type" : {int, float, str},
@@ -329,6 +329,27 @@ class RobustTopics():
         "jensenshannon": 1,
         "jaccard": 1,
             "kendalltau": 1}):
+        """Rank all fitted models based on set, distribution and ranking metrics.
+
+        Parameters
+        ----------
+        weights : object
+            The weighting for the ranking algorithm for each of the three used
+            methods. A value of 0 means the specific methoc is not used and the other metrics are weighted based on the relative values. The
+            default is 1 for each metric.
+            Example:
+            {
+                "jensenshannon": value,
+                "jaccard": value,
+                "kendalltau": value
+            }
+
+        Returns
+        -------
+        list_of_reports : [objects]
+            Returns a sorted list of report objects.
+        """
+
         all_reports = []
 
         for model in self.models:
@@ -340,6 +361,18 @@ class RobustTopics():
     #     pass
 
     def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
+        """Print intersecting words between initializations from the specified sample and model combination.
+
+        Parameters
+        ----------
+        model_id : int
+            The array index of the model.
+        sample_id : int
+            The array index of the sample within the selected model.
+        occurrence_percent : float between [0, 1]
+            In how many percent of all initialization the word has to appear for printing. 1 means it has to appear in all and 0.5 in half of the initializations.
+        """
+
         model = self.models[model_id]
         n_runs = len(model.samples[sample_id])
 
@@ -375,10 +408,24 @@ class RobustTopics():
             for count, words in print_data.items():
                 print("In", count, "runs:", " ".join(words))
 
-    def display_run_topics(self, model_id, sample_id, run_number, no_top_words):
+    def display_run_topics(self, model_id, sample_id, initialization_id, no_top_words=10):
+        """Print the top n words for each topic of a specific initialization.
+
+        Parameters
+        ----------
+        model_id : int
+            The array index of the model.
+        sample_id : int
+            The array index of the sample within the selected model.
+        initialization_id : int
+            The array index of the initialization of respective sample and model.
+        no_top_words : int
+            The number of top words shown
+        """
+
         model = self.models[model_id]
 
-        for topic_idx, topic in enumerate(model.topic_terms[sample_id][run_number]):
+        for topic_idx, topic in enumerate(model.topic_terms[sample_id][initialization_id]):
             print("Topic %d:" % (topic_idx))
             print(" ".join(topic))
 
