@@ -92,27 +92,31 @@ def show_histograms(self):
 
 
 class RobustTopics():
-    """Run different topic models multiple times and return them by their ranked by topic stability.
+    """Train and evaluate topic models based on topic robustness measures like jaccard distance of topic terms or topic distributions
+    computed on multiple initializations of the same model.
 
-    Some Explanation
-    ----------
-    n_components : [min_n, max_n], default=[1, 20]
-        Minimum and maximum values for the n_components parameter.
-    n_samples : int, default=10
-        The number of samples taken from the n_components range.
-    n_iterations : int, default=20
-        The number of random runs each sample is computed.
-        These are used to compute the robustness.
-    models : [sklearn topic model classes], default=[LatentDirichletAllocation]
-        Possibilities: LatentDirichletAllocation, NMF
-
-    See also
-    --------
-    sklearn.decomposition.LatentDirichletAllocation : LDA implementation.
-    sklearn.decomposition.NMF : NMF implementation.
+    Examples
+    -------
+    Initialize a sklearn model.
+        >>> from robustTopics import robustTopics
+        >>>
+        >>> robustTopics = RobustTopics(spacy_nlp)
+    Add a sklearn topic model.
+        >>> robustTopics.load_sklearn_model(NMF, vecs, vectorizer, n_samples, n_initializations)
+    Add a gensim topic model.
+        >>> robustTopics.load_gensim_model(ldamulticore.LdaModel, corpus, dictionary, n_samples, n_initializations)
     """
 
     def __init__(self, spacy_nlp, n_relevant_top_words=20):
+        """
+        Parameters
+        ----------
+        spacy_nlp : spacy instance
+            A instance of spacy with a already loaded model.
+        n_relevant_topics : int, optional
+            The bnumber of relevant top words for each topic.
+        """
+
         self.n_relevant_top_words = n_relevant_top_words
         self.nlp = spacy_nlp
 
