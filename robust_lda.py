@@ -63,9 +63,12 @@ corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 # TOPIC MODELLING
 robustTopics = RobustTopics(nlp, 5)
 
-robustTopics.load_gensim_model(ldamulticore.LdaModel, corpus, dictionary, 5, n_initializations=6)
-robustTopics.load_gensim_model(nmf.Nmf, corpus, dictionary, 5, n_initializations=6)
-robustTopics.load_sklearn_model(LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
+robustTopics.load_gensim_model(
+    ldamulticore.LdaModel, corpus, dictionary, 5, n_initializations=6)
+robustTopics.load_gensim_model(
+    nmf.Nmf, corpus, dictionary, 5, n_initializations=6)
+robustTopics.load_sklearn_model(
+    LatentDirichletAllocation, tf, tf_vectorizer, 5, n_initializations=6)
 robustTopics.load_sklearn_model(NMF, tf, tf_vectorizer, 5, n_initializations=3)
 
 robustTopics.fit_models()
@@ -123,12 +126,7 @@ class RobustTopics():
         self.models = []
 
     def fit_models(self):
-        """Fit the models
-
-        Parameters
-        ----------
-        X : array-like or sparse matrix, shape=(n_samples, n_features)
-        y : Ignored
+        """Fit all loaded models and compute the robustness measures.
 
         Returns
         -------
@@ -165,6 +163,57 @@ class RobustTopics():
         return self
 
     def load_gensim_model(self, gensim_model, corpus, dictionary, n_samples, n_initializations=10, setup="simple", custom_params=None):
+        """Load gensim topic models.
+
+        Load a gensim topic model with the related preprocessed data and all
+        parameters and parameter ranges.
+
+        Parameters
+        ----------
+        gensim_model : { gensim.models.LdaModel,
+            gensim.models.nmf, gensim.models.ldamulticore}
+            The topic model python class
+        corpus : array-like or sparse matrix, shape=(n_samples, n_features)
+            The dataset used for model fitting.
+        dictionary : gensim.corpora.dictionary
+            The dictionary object used to create the corpus.
+        n_samples : int
+            The number of differently parametrized models.
+        n_initializations : int
+            The number of re-initializations for each sample.
+        setup : { "simple", "complex" or "custom" }
+            Chose some preset parameter ranges or use your own. Following options exist.
+            "simple"
+            {
+                "num_topics":
+                {"type": int, "mode": "range", "values": [5, 20]}
+            }
+            "complex"
+            {
+                "num_topics":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "decay":
+                {"type": float, "mode": "range", "values": [0.51, 1]}
+            }
+            "custom"
+            Use your own parameters for the sampling algorithm.
+        custom_params : object
+            Only used when "custom" is set for setup. The format is a dictionary
+            with the folloing content
+            {
+                parameter_name : {
+                    "type" : {int, float, str},
+                    "mode" : {range, list, fixed},
+                    "values : [min, max] for range and list or value for fixed
+                }
+            }
+
+        Returns
+        -------
+        self : object
+            Returns self.
+        """
+
         parameters = {}
         if setup == "simple":
             parameters = {
@@ -196,6 +245,56 @@ class RobustTopics():
         return self
 
     def load_sklearn_model(self, sklearn_model, document_vectors, vectorizer, n_samples, n_initializations=10, setup="simple", custom_params=None):
+        """Load sklearn topic models.
+
+        Load a sklearn topic model with the related preprocessed data and all
+        parameters and parameter ranges.
+
+        Parameters
+        ----------
+        sklearn_model : { sklearn.decomposition.LatentDirichletAllocation, sklearn.decomposition.NMF}
+            The topic model python class
+        document_vectores : array-like or sparse matrix, shape=(n_samples, n_features)
+            The dataset used for model fitting.
+        vectorizer : sklearn.feature_extraction.text.*Vectorizer
+            The vectorizer object used to create the document_vectors.
+        n_samples : int
+            The number of differently parametrized models.
+        n_initializations : int
+            The number of re-initializations for each sample.
+        setup : { "simple", "complex" or "custom" }
+            Chose some preset parameter ranges or use your own. Following options exist.
+            "simple"
+            {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 20]}
+            }
+            "complex"
+            {
+                "n_components":
+                {"type": int, "mode": "range", "values": [5, 50]},
+                "learning_decayfloat":
+                {"type": float, "mode": "range", "values": [0.51, 1]}}
+            }
+            "custom"
+            Use your own parameters for the sampling algorithm.
+        custom_params : object
+            Only used when "custom" is set for setup. The format is a dictionary
+            with the folloing content
+            {
+                parameter_name : {
+                    "type" : {int, float, str},
+                    "mode" : {range, list, fixed},
+                    "values : [min, max] for range and list or value for fixed
+                }
+            }
+
+        Returns
+        -------
+        self : object
+            Returns self.
+        """
+
         parameters = {}
         if setup == "simple":
             parameters = {
