@@ -145,18 +145,18 @@ class RobustTopics():
             Returns self.
         """
 
-        print("Fit Models")
+        # print("Fit Models")
         for model in self.models:
-            print("")
-            print("Model: ", model.topic_model_class)
+            # print("")
+            # print("Model: ", model.topic_model_class)
 
             for sample in model.sampling_parameters:
                 sample_initializations = []
-                print(sample, end=" - ")
-                print(str(model.n_initializations)+" Iterations:", end=" ")
+                # print(sample, end=" - ")
+                # print(str(model.n_initializations)+" Iterations:", end=" ")
 
                 for it in range(1, model.n_initializations+1):
-                    print(str(it), end=" ")
+                    # print(str(it), end=" ")
 
                     if model.source_lib == "sklearn":
                         sample_initializations.append(
@@ -167,7 +167,7 @@ class RobustTopics():
                             corpus=model.data, id2word=model.word_mapping, **sample))
 
                 model.samples.append(sample_initializations)
-                print("")
+                # print("")
 
         self._compute_topic_stability()
 
@@ -251,7 +251,7 @@ class RobustTopics():
 
         self.models.append(topic)
 
-        print(gensim_model, " successfully loaded.")
+        # print(gensim_model, " successfully loaded.")
 
         return self
 
@@ -332,7 +332,7 @@ class RobustTopics():
 
         self.models.append(topic)
 
-        print(sklearn_model, " successfully loaded.")
+        # print(sklearn_model, " successfully loaded.")
 
         return self
 
@@ -387,8 +387,8 @@ class RobustTopics():
         model = self.models[model_id]
         n_runs = len(model.samples[sample_id])
 
-        print("Words per topic appearing at least in ",
-              round(occurence_percent*100), "% of all runs(", n_runs, ").")
+        # print("Words per topic appearing at least in ",
+        #       round(occurence_percent*100), "% of all runs(", n_runs, ").")
 
         n_topics = 0
         if model.source_lib == "sklearn":
@@ -491,12 +491,12 @@ class RobustTopics():
 
     def _topic_matching(self, n_topics, model, sample_id, terms, term_distributions, ranking_vecs):
         """Compute the coherence scores for each topic."""
-        print("Topic Matching for each Initialization")
+        # print("Topic Matching for each Initialization")
         run_coherences = []
 
-        print("Compute Topic Coherence:", end="")
+        # print("Compute Topic Coherence:", end="")
         for run_number in range(model.n_initializations):
-            print(model.n_initializations-run_number, end="")
+            # print(model.n_initializations-run_number, end="")
             topic_terms = model.topic_terms[sample_id][run_number]
 
             run_coherences.append(self.compute_tcw2c(n_topics, topic_terms))
@@ -504,11 +504,11 @@ class RobustTopics():
         best_run = run_coherences.index(max(run_coherences))
         reference_topic = terms[best_run]
 
-        print("")
-        print("Match Topics:", end="")
+        # print("")
+        # print("Match Topics:", end="")
         # Create mapping for all topics across all runs
         for run in range(model.n_initializations):
-            print(model.n_initializations-run, end="")
+            # print(model.n_initializations-run, end="")
             topics = np.concatenate((reference_topic, terms[
                 run, :, :]), axis=0)
             sim = squareform(pdist(topics, self._jaccard_similarity))[
@@ -535,7 +535,7 @@ class RobustTopics():
             term_distributions[run] = term_distributions[run, sort_indices]
             ranking_vecs[run] = ranking_vecs[run, sort_indices]
 
-        print("")
+        # print("")
         return np.array(run_coherences)
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
@@ -560,23 +560,23 @@ class RobustTopics():
                 if tokens[0].has_vector and tokens[1].has_vector:
                     pairs.append(tokens[0].similarity(tokens[1]))
                 else:
-                    print("One of", tokens, "has no vector.")
+                    print("One of", tokens, "has no vector representation.")
 
             total_coherence.append(sum(pairs) / len(pairs))
         return sum(total_coherence) / n_topics
 
     def _compute_topic_stability(self):
         """Computes the stability for each model."""
-        print("Evaluate Models")
+        # print("Evaluate Models")
         for model_id, model in enumerate(self.models):
-            print("Model: ", model.topic_model_class)
+            # print("Model: ", model.topic_model_class)
             self._fetch_top_terms(model, 20)
             model_distributions = self._fetch_term_distributions(model)
             all_ranking_vecs = self._create_ranking_vectors(model)
 
             for sample_id, sample in enumerate(model.samples):
-                print("Sample", sample_id+1, "of",
-                      len(model.samples), " Samples")
+                # print("Sample", sample_id+1, "of",
+                #       len(model.samples), " Samples")
                 n_topics = 0
                 if model.source_lib == "sklearn":
                     n_topics = sample[0].n_components
@@ -657,7 +657,7 @@ class RobustTopics():
 
                 model.report.append(report)
                 model.report_full.append(report_full)
-            print("")
+            # print("")
 
     @staticmethod
     def _linear_combination_of_reports(weights, report):

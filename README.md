@@ -1,7 +1,7 @@
-# robustTopics
-robustTopics is a library for **non-machine learning experts** interested in building robust
-topic models. The main goal is to provide the a simple to use framework to check if
-a topic model reaches each time it is run the same or at least similar result.
+# robics
+**rob**ustTop**ics** is a library targeted at **non-machine learning experts** interested in building robust
+topic models. The main goal is to provide a simple to use framework to check if
+a topic model reaches each run the same or at least a similar result.
 
 ## Features
 - Supports sklearn (LatentDirichletAllocation, NMF) and gensim (LdaModel, ldamulticore, nmf) topic models
