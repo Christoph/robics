@@ -17,10 +17,10 @@ a topic model reaches each run the same or at least a similar result.
 - **Python Version:** 3.5+
 - **Package Managers:** pip
 
-### pip - work in progress
-Using pip, robustTopics releases are available as source packages and binary wheels:
+### pip
+Using pip, robics releases are available as source packages and binary wheels:
 ```
-pip install robustTopics
+pip install robics
 ```
 
 ## Example
@@ -33,6 +33,7 @@ from gensim.models import LdaModel, nmf, ldamulticore
 from gensim.utils import simple_preprocess
 from gensim import corpora
 import spacy
+from robics import robustTopics
 
 nlp = spacy.load("en")
 
