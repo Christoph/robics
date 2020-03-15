@@ -106,3 +106,4 @@ dist
 # Custom
 .vscode
 MANIFEST
+robics.egg-info/
