@@ -25,7 +25,6 @@ pip install robustTopics
 
 ## Example
 This is a full example including the preprocessing steps. Feel free to adapt it to your own needs.
-
 ```python
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
