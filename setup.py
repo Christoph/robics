@@ -15,7 +15,7 @@ setup(
     author='Christoph Kralj',
     author_email='christoph.kralj@gmail.com',
     url='https://github.com/Christoph/robics',
-    download_url='https://github.com/Christoph/robics/archive/v_01.tar.gz',
+    download_url='https://github.com/Christoph/robics/archive/v_011.tar.gz',
     keywords=['nlp', 'Topic Model', 'sklearn', 'gensim', 'topic-modeling'],
     install_requires=[            # I get to this in a second
         'numpy',
