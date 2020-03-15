@@ -33,7 +33,7 @@ from gensim.models import LdaModel, nmf, ldamulticore
 from gensim.utils import simple_preprocess
 from gensim import corpora
 import spacy
-from robics import robustTopics
+from robics import RobustTopics
 
 nlp = spacy.load("en")
 
@@ -97,6 +97,7 @@ pd.DataFrame.from_records(robustTopics.models[model_id].report)
 
 ## Next Steps
 - Adding support for more modells if required.
+- Add logging
 - Writing unit tests.
 - Improving the overall performance.
 - Implementing the Cv coherence measure from this [paper](https://svn.aksw.org/papers/2015/WSDM_Topic_Evaluation/public.pdf)
