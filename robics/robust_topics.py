@@ -286,7 +286,8 @@ class RobustTopics():
     def rank_models(self, weights={
         "jensenshannon": 1,
         "jaccard": 1,
-            "kendalltau": 1}):
+        "kendalltau": 1,
+            "topic_coherence": 1}):
         """Rank all fitted models based on set, distribution and ranking metrics.
 
         Parameters
@@ -329,6 +330,43 @@ class RobustTopics():
         """
         model = self.models[model_id].samples[sample_id][run_id]
         return model
+
+    def display_sample_topic_consistency(self, model_id, sample_id):
+        """Print the words based on the number of runs they are used in the same topic
+
+        Parameters
+        ----------
+        model_id : int
+            The array index of the model.
+        sample_id : int
+            The array index of the sample within the selected model.
+        """
+
+        model = self.models[model_id]
+        n_runs = len(model.samples[sample_id])
+
+        n_topics = 0
+        if model.source_lib == "sklearn":
+            n_topics = len(model.samples[sample_id][0].components_)
+        if model.source_lib == "gensim":
+            n_topics = model.samples[sample_id][0].num_topics
+
+        common_words = [[] for _ in range(n_runs)]
+
+        for topic in range(n_topics):
+            word_list = []
+            for terms in model.topic_terms[sample_id]:
+                word_list.extend(terms[topic])
+
+            counter = Counter(word_list)
+
+            for word, count in counter.items():
+                common_words[count-1].append(word)
+
+        for i, words in enumerate(reversed(common_words)):
+            print('Words in '+str(n_runs-i)+' out of '+str(n_runs)+' runs:')
+            print(words)
+            print('')
 
     def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
         """Print intersecting words between initializations from the specified sample and model combination.
