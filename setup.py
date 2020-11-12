@@ -9,7 +9,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(
     name='robics',
     packages=['robics'],
-    version='0.11',
+    version='0.12',
     license='MIT',
     description='Automatic detection of robust parametrizations for LDA and NMF. Compatible with scikit-learn and gensim.',
     author='Christoph Kralj',

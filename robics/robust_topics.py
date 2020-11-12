@@ -378,7 +378,7 @@ class RobustTopics():
             for count, words in print_data.items():
                 print("In", count, "runs:", " ".join(words))
 
-    def display_run_topics(self, model_id, sample_id, initialization_id, no_top_words=10):
+    def display_run_topics(self, model_id, sample_id, initialization_id):
         """Print the top n words for each topic of a specific initialization.
 
         Parameters
@@ -389,8 +389,6 @@ class RobustTopics():
             The array index of the sample within the selected model.
         initialization_id : int
             The array index of the initialization of respective sample and model.
-        no_top_words : int
-            The number of top words shown
         """
 
         model = self.models[model_id]
