@@ -368,8 +368,20 @@ class RobustTopics():
 
         return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
 
-    # def display_model_topics(self):
-    #     pass
+    def export_model(self, model_id, sample_id, run_id):
+        """ Export a specific topic model instance
+
+        Parameters
+        ----------
+        model_id : int
+            The array index of the model.
+        sample_id : int
+            The array index of the sample within the selected model.
+        initialization_id : int
+            The array index of the initialization of respective sample and model.
+        """
+        model = self.models[model_id].samples[sample_id][run_id]
+        return model
 
     def display_sample_topics(self, model_id, sample_id, occurence_percent=1):
         """Print intersecting words between initializations from the specified sample and model combination.
