@@ -173,7 +173,7 @@ class RobustTopics():
 
         return self
 
-    def load_gensim_model(self, gensim_model, corpus, dictionary, n_samples, n_initializations=10, setup="simple", custom_params=None):
+    def load_gensim_model(self, gensim_model, corpus, dictionary, dimension_range=[5, 20], n_samples=5, n_initializations=10, custom_params=None):
         """Load gensim topic models.
 
         Load a gensim topic model with the related preprocessed data and all
@@ -188,29 +188,15 @@ class RobustTopics():
             The dataset used for model fitting.
         dictionary : gensim.corpora.dictionary
             The dictionary object used to create the corpus.
+        dimension_range : [int, int]
+            The minimum and maximum number of topics for the sampling algorithm
         n_samples : int
             The number of differently parametrized models.
         n_initializations : int
             The number of re-initializations for each sample.
-        setup : { "simple", "complex" or "custom" }
-            Chose some preset parameter ranges or use your own. Following options exist.
-            "simple"
-            {
-                "num_topics":
-                {"type": int, "mode": "range", "values": [5, 20]}
-            }
-            "complex"
-            {
-                "num_topics":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "decay":
-                {"type": float, "mode": "range", "values": [0.51, 1]}
-            }
-            "custom"
-            Use your own parameters for the sampling algorithm.
         custom_params : object
-            Only used when "custom" is set for setup. The format is a dictionary
-            with the folloing content
+            Allows to sample all model parameters. If something is handed here the dimension_range parameter will be ignored.
+            The format is a dictionary with the following content
             {
                 parameter_name : {
                     "type" : {int, float, str},
@@ -225,22 +211,12 @@ class RobustTopics():
             Returns self.
         """
 
-        parameters = {}
-        if setup == "simple":
-            parameters = {
-                "num_topics":
-                {"type": int, "mode": "range", "values": [5, 20]}
-            }
+        parameters = {
+            "n_components":
+                {"type": int, "mode": "range", "values": dimension_range}
+        }
 
-        if setup == "complex":
-            parameters = {
-                "num_topics":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "decay":
-                {"type": float, "mode": "range", "values": [0.51, 1]}
-            }
-
-        if setup == "custom":
+        if custom_params:
             parameters = custom_params
 
         sampling_parameters = self._compute_param_combinations(
@@ -251,11 +227,9 @@ class RobustTopics():
 
         self.models.append(topic)
 
-        # print(gensim_model, " successfully loaded.")
-
         return self
 
-    def load_sklearn_model(self, sklearn_model, document_vectors, vectorizer, n_samples, n_initializations=10, setup="simple", custom_params=None):
+    def load_sklearn_model(self, sklearn_model, document_vectors, vectorizer, dimension_range=[5, 20], n_samples=5, n_initializations=10, custom_params=None):
         """Load sklearn topic models.
 
         Load a sklearn topic model with the related preprocessed data and all
@@ -269,29 +243,15 @@ class RobustTopics():
             The dataset used for model fitting.
         vectorizer : sklearn.feature_extraction.text.*Vectorizer
             The vectorizer object used to create the document_vectors.
+        dimension_range : [int, int]
+            The minimum and maximum number of topics for the sampling algorithm
         n_samples : int
             The number of differently parametrized models.
         n_initializations : int
             The number of re-initializations for each sample.
-        setup : { "simple", "complex" or "custom" }
-            Chose some preset parameter ranges or use your own. Following options exist.
-            "simple"
-            {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 20]}
-            }
-            "complex"
-            {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "learning_decayfloat":
-                {"type": float, "mode": "range", "values": [0.51, 1]}}
-            }
-            "custom"
-            Use your own parameters for the sampling algorithm.
         custom_params : object
-            Only used when "custom" is set for setup. Use the following format
-            for the parameters:
+            Allows to sample all model parameters. If something is handed here the dimension_range parameter will be ignored.
+            The format is a dictionary with the following content
             {
                 parameter_name : {
                     "type" : {int, float, str},
@@ -305,23 +265,12 @@ class RobustTopics():
         self : object
             Returns self.
         """
+        parameters = {
+            "n_components":
+                {"type": int, "mode": "range", "values": dimension_range}
+        }
 
-        parameters = {}
-        if setup == "simple":
-            parameters = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 20]}
-            }
-
-        if setup == "complex":
-            parameters = {
-                "n_components":
-                {"type": int, "mode": "range", "values": [5, 50]},
-                "learning_decayfloat":
-                {"type": float, "mode": "range", "values": [0.51, 1]}
-            }
-
-        if setup == "custom":
+        if custom_params:
             parameters = custom_params
 
         sampling_parameters = self._compute_param_combinations(
@@ -331,8 +280,6 @@ class RobustTopics():
             "sklearn", sklearn_model, document_vectors, vectorizer, parameters, sampling_parameters, n_samples, n_initializations, [], [], [], [])
 
         self.models.append(topic)
-
-        # print(sklearn_model, " successfully loaded.")
 
         return self
 
