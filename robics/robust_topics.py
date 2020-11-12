@@ -300,7 +300,8 @@ class RobustTopics():
             {
                 "jensenshannon": value,
                 "jaccard": value,
-                "kendalltau": value
+                "kendalltau": value,
+                "topic_coherence': value
             }
 
         Returns
