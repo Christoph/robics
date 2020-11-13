@@ -334,6 +334,15 @@ class RobustTopics():
 
     def export_topic_sort_indices(self, model_id, sample_id, run_id):
         """ Returns the sort indices for a specific model instance
+
+        Parameters
+        ----------
+        model_id : int
+            The array index of the model.
+        sample_id : int
+            The array index of the sample within the selected model.
+        initialization_id : int
+            The array index of the initialization of respective sample and model.
         """
 
         indices = self.models[model_id].topic_sorting_indices[sample_id][run_id]
