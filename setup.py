@@ -9,13 +9,13 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(
     name='robics',
     packages=['robics'],
-    version='0.12',
+    version='0.21',
     license='MIT',
     description='Automatic detection of robust parametrizations for LDA and NMF. Compatible with scikit-learn and gensim.',
     author='Christoph Kralj',
     author_email='christoph.kralj@gmail.com',
     url='https://github.com/Christoph/robics',
-    download_url='https://github.com/Christoph/robics/archive/v_011.tar.gz',
+    download_url='https://github.com/Christoph/robics/archive/v0.21.tar.gz',
     keywords=['nlp', 'Topic Model', 'sklearn', 'gensim', 'topic-modeling'],
     install_requires=[            # I get to this in a second
         'numpy',
