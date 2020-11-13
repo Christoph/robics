@@ -212,7 +212,7 @@ class RobustTopics():
         """
 
         parameters = {
-            "n_components":
+            "num_topics":
                 {"type": int, "mode": "range", "values": dimension_range}
         }
 
