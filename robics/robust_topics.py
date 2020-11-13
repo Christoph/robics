@@ -318,7 +318,7 @@ class RobustTopics():
         return sorted(all_reports, key=lambda s: self._linear_combination_of_reports(weights, s), reverse=True)
 
     def export_model(self, model_id, sample_id, run_id):
-        """ Export a specific topic model instance
+        """ Returns a specific topic model instance
 
         Parameters
         ----------
@@ -331,6 +331,13 @@ class RobustTopics():
         """
         model = self.models[model_id].samples[sample_id][run_id]
         return model
+
+    def export_topic_sort_indices(self, model_id, sample_id, run_id):
+        """ Returns the sort indices for a specific model instance
+        """
+
+        indices = self.models[model_id].topic_sorting_indices[sample_id][run_id]
+        return indices
 
     def display_sample_topic_consistency(self, model_id, sample_id):
         """Print the words based on the number of runs they are used in the same topic
@@ -432,7 +439,10 @@ class RobustTopics():
 
         model = self.models[model_id]
 
-        for topic_idx, topic in enumerate(model.topic_terms[sample_id][initialization_id]):
+        sorted_topics = np.array(model.topic_terms[sample_id][initialization_id])[
+            model.topic_sorting_indices[sample_id][initialization_id]]
+
+        for topic_idx, topic in enumerate(sorted_topics):
             print("Topic %d:" % (topic_idx))
             print(" ".join(topic))
 
@@ -489,6 +499,7 @@ class RobustTopics():
         """Compute the coherence scores for each topic."""
         # print("Topic Matching for each Initialization")
         run_coherences = []
+        run_sort_indices = []
 
         # print("Compute Topic Coherence:", end="")
         for run_number in range(model.n_initializations):
@@ -525,14 +536,14 @@ class RobustTopics():
 
             run_mapping.sort()
             sort_indices = np.array(run_mapping)[:, 1]
+            run_sort_indices.append(sort_indices)
 
             # Sort all runs
             terms[run] = terms[run, sort_indices]
             term_distributions[run] = term_distributions[run, sort_indices]
             ranking_vecs[run] = ranking_vecs[run, sort_indices]
 
-        # print("")
-        return np.array(run_coherences)
+        return np.array(run_coherences), run_sort_indices
 
     # Ideas from here: https://github.com/derekgreene/topic-model-tutorial/blob/master/3%20-%20Parameter%20Selection%20for%20NMF.ipynb
     def compute_tcw2c(self, n_topics, topic_terms, max_terms=5):
@@ -569,6 +580,7 @@ class RobustTopics():
             self._fetch_top_terms(model, 20)
             model_distributions = self._fetch_term_distributions(model)
             all_ranking_vecs = self._create_ranking_vectors(model)
+            sample_sorting_indices = []
 
             for sample_id, sample in enumerate(model.samples):
                 # print("Sample", sample_id+1, "of",
@@ -590,8 +602,10 @@ class RobustTopics():
                 report = {}
                 report_full = {}
 
-                run_coherence = self._topic_matching(
+                run_coherence, sort_indices = self._topic_matching(
                     n_topics, model, sample_id, terms, term_distributions, ranking_vecs)
+
+                sample_sorting_indices.append(sort_indices)
 
                 # Evaluate each topic
                 for topic in range(n_topics):
@@ -654,6 +668,7 @@ class RobustTopics():
                 model.report.append(report)
                 model.report_full.append(report_full)
             # print("")
+            model.topic_sorting_indices = sample_sorting_indices
 
     @staticmethod
     def _linear_combination_of_reports(weights, report):
@@ -779,6 +794,7 @@ class RobustTopics():
 
 class TopicModel():
     """A helper class for the robustTopics class."""
+    topic_sorting_indices = []
 
     def __init__(self, source_lib, topic_model_class, data, word_mapping, parameters, sampling_parameters, n_samples, n_initializations, samples, topic_terms, report, report_full) -> None:
         self.source_lib = source_lib
