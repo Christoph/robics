@@ -674,6 +674,12 @@ class RobustTopics():
                     "max": jensen_similarity.max(axis=1),
                 }
 
+                top_terms = {}
+                for i, t in enumerate(terms):
+                    top_terms['instance_'+str(i)] = t
+
+                report_full["top_words"] = top_terms
+
                 model.report.append(report)
                 model.report_full.append(report_full)
             # print("")
